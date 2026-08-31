@@ -1,6 +1,6 @@
 {
   "name": "omarchy-t3code",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A compact native T3 Command Center client for Omarchy.",
   "private": true,
   "type": "module",

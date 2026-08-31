@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "bralyx.t3code",
   "name": "T3 Command Center",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Bralyx Digital",
   "license": "MIT",
   "description": "A compact native T3 Command Center client for Omarchy — Inbox and threads without the full desktop app.",
