@@ -18,13 +18,17 @@ BorderSurface {
   function modelOptions() {
     var result = []
     var values = service.models || []
-    for (var i = 0; i < values.length; i++) if (values[i].available)
+    var environmentId = String(threadData.environmentId || "")
+    for (var i = 0; i < values.length; i++) {
+      if (!values[i].available) continue
+      if (environmentId && String(values[i].environmentId || "") !== environmentId) continue
       result.push({
         value: String(values[i].instanceId) + "\u001f" + String(values[i].model),
         label: String(values[i].providerLabel) + " · " + String(values[i].label || values[i].model),
         providerLabel: String(values[i].providerLabel),
         modelLabel: String(values[i].label || values[i].model)
       })
+    }
     return result
   }
 

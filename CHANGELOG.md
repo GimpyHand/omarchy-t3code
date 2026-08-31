@@ -31,6 +31,11 @@ standalone.
   `io.github.gimpyhand.omarchy-t3code`.
 - Create-form label vs value contrast; phase labels aligned with popup text
   color; richer thread metadata chips (system, project, branch, model, time).
+- Removed unused CLI loopback OAuth provider; native Clerk remains the only
+  auth path (`UPSTREAM_OAUTH_DPOP_UNSUPPORTED` kept for Relay classification).
+- Thread composer model list filtered to the open thread's system.
+- Packaged plugin includes `uninstall` so archive installs match the README
+  path.
 
 ### Security
 

@@ -186,6 +186,10 @@ await copyFile(join(root, "scripts", "install-package"), join(outputRoot, "insta
 await chmod(join(outputRoot, "install"), 0o755);
 await copyFile(join(root, "scripts", "uninstall-package"), join(outputRoot, "uninstall"));
 await chmod(join(outputRoot, "uninstall"), 0o755);
+// Also ship uninstall inside the plugin tree so README's installed path
+// (~/.config/omarchy/plugins/<id>/uninstall) works after archive install.
+await copyFile(join(root, "scripts", "uninstall-package"), join(packagedPlugin, "uninstall"));
+await chmod(join(packagedPlugin, "uninstall"), 0o755);
 
 const omarchy = spawnSync("omarchy", ["plugin", "validate", packagedPlugin], { cwd: root, encoding: "utf8", stdio: "inherit" });
 if (omarchy.error && omarchy.error.code !== "ENOENT") throw omarchy.error;

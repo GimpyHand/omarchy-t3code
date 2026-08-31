@@ -1,179 +1,22 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { startCallbackServer } from "../bridge/src/auth/callbackServer.ts";
 import { forwardNativeCallback } from "../bridge/src/auth/nativeCallback.ts";
 import { NativeClerkProvider } from "../bridge/src/auth/nativeProvider.ts";
-import { makePkceRequest, stateMatches } from "../bridge/src/auth/pkce.ts";
 import {
   activateT3ProtocolHandler,
   clearT3ProtocolDefault,
   installT3CallbackDesktop,
   type MimeCommand,
 } from "../bridge/src/auth/protocolHandler.ts";
-import { LoopbackOAuthProvider } from "../bridge/src/auth/provider.ts";
 import {
   MemorySecretStore,
   SecretServiceStore,
   type SecretToolRunner,
 } from "../bridge/src/security/secretStore.ts";
-
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen({ host: "127.0.0.1", port: 0 }, resolve);
-  });
-  const address = server.address();
-  assert(address !== null && typeof address === "object");
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-  return address.port;
-}
-
-test("PKCE uses independent strong verifier/state values and S256", () => {
-  const first = makePkceRequest();
-  const second = makePkceRequest();
-  assert.notEqual(first.verifier, second.verifier);
-  assert.notEqual(first.state, second.state);
-  assert.equal(Buffer.from(first.verifier, "base64url").length, 32);
-  assert.equal(Buffer.from(first.state, "base64url").length, 16);
-  assert.equal(first.challenge, createHash("sha256").update(first.verifier).digest("base64url"));
-  assert.equal(stateMatches(first.state, first.state), true);
-  assert.equal(stateMatches(first.state, `${first.state}x`), false);
-  assert.equal(stateMatches(first.state, null), false);
-});
-
-test("loopback callback rejects bad state and accepts a later valid callback", async () => {
-  const callback = await startCallbackServer({ port: 0, expectedState: "expected", timeoutMs: 2_000 });
-  assert.equal(callback.host, "127.0.0.1");
-  assert(callback.port > 0);
-  const invalid = await fetch(`http://127.0.0.1:${callback.port}/callback?code=wrong&state=other`);
-  assert.equal(invalid.status, 400);
-  assert.equal(invalid.headers.get("cache-control"), "no-store");
-  const valid = await fetch(`http://127.0.0.1:${callback.port}/callback?code=oauth-code&state=expected`);
-  assert.equal(valid.status, 200);
-  assert.match(await valid.text(), /Omarchy T3 Command Center is opening/u);
-  assert.equal(await callback.code, "oauth-code");
-  await callback.close();
-});
-
-test("loopback callback reports an occupied port without binding elsewhere", async () => {
-  const occupied = createServer();
-  await new Promise<void>((resolve, reject) => {
-    occupied.once("error", reject);
-    occupied.listen({ host: "127.0.0.1", port: 0 }, resolve);
-  });
-  const address = occupied.address();
-  assert(address !== null && typeof address === "object");
-  await assert.rejects(
-    startCallbackServer({ port: address.port, expectedState: "state" }),
-    (error: unknown) => (error as { code?: string }).code === "CALLBACK_PORT_OCCUPIED",
-  );
-  await new Promise<void>((resolve) => occupied.close(() => resolve()));
-});
-
-test("OAuth provider completes browser loopback login and persists credentials", async () => {
-  const port = await freePort();
-  const store = new MemorySecretStore();
-  let tokenBodyText = "";
-  const identityPayload = Buffer.from(JSON.stringify({ email: "person@example.test" })).toString("base64url");
-  const idToken = `eyJhbGciOiJub25lIn0.${identityPayload}.signature`;
-  const request: typeof fetch = async (_input, init) => {
-    tokenBodyText = String(init?.body);
-    return new Response(JSON.stringify({
-      access_token: "opaque-access-token",
-      refresh_token: "opaque-refresh-token",
-      id_token: idToken,
-      expires_in: 3600,
-      token_type: "Bearer",
-    }), { status: 200, headers: { "content-type": "application/json" } });
-  };
-  const provider = new LoopbackOAuthProvider({
-    store,
-    fetch: request,
-    config: { loopbackPort: port },
-    openBrowser: async (authorizationUrl) => {
-      const parsed = new URL(authorizationUrl);
-      assert.equal(parsed.origin, "https://nightly.app.t3.codes");
-      assert.equal(parsed.pathname, "/connect");
-      const fragment = new URLSearchParams(parsed.hash.slice(1));
-      assert.equal(fragment.get("port"), String(port));
-      assert(fragment.get("challenge"));
-      const response = await fetch(
-        `http://127.0.0.1:${port}/callback?code=oauth-code&state=${encodeURIComponent(fragment.get("state") ?? "")}`,
-      );
-      assert.equal(response.status, 200);
-    },
-  });
-  const status = await provider.login();
-  assert.equal(status.phase, "signedIn");
-  assert.equal(status.identity, "person@example.test");
-  assert.equal(status.remoteAccess, "unknown");
-  const tokenBody = new URLSearchParams(tokenBodyText);
-  assert.equal(tokenBody.get("grant_type"), "authorization_code");
-  assert.equal(tokenBody.get("code"), "oauth-code");
-  assert.equal(tokenBody.get("redirect_uri"), `http://127.0.0.1:${port}/callback`);
-  assert.equal(Buffer.from(tokenBody.get("code_verifier") ?? "", "base64url").length, 32);
-  assert.equal((await provider.relayCredential()).token, "opaque-access-token");
-  assert(await store.get("t3-connect-oauth"));
-  await provider.logout();
-  assert.equal(await store.get("t3-connect-oauth"), null);
-});
-
-test("OAuth provider refreshes an expiring saved session without exposing it to QML", async () => {
-  const store = new MemorySecretStore();
-  await store.set("t3-connect-oauth", JSON.stringify({
-    accessToken: "old-access",
-    refreshToken: "saved-refresh",
-    expiresAtEpochMs: Date.now() - 1,
-    identity: "saved@example.test",
-  }));
-  let body = "";
-  const provider = new LoopbackOAuthProvider({
-    store,
-    fetch: async (_input, init) => {
-      body = String(init?.body);
-      return new Response(JSON.stringify({
-        access_token: "new-access",
-        expires_in: 3600,
-        token_type: "Bearer",
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    },
-  });
-
-  const status = await provider.initialize();
-  assert.equal(status.phase, "signedIn");
-  assert.equal(status.identity, "saved@example.test");
-  const refresh = new URLSearchParams(body);
-  assert.equal(refresh.get("grant_type"), "refresh_token");
-  assert.equal(refresh.get("refresh_token"), "saved-refresh");
-  assert.equal((await provider.relayCredential()).token, "new-access");
-  const persisted = JSON.parse((await store.get("t3-connect-oauth"))!);
-  assert.equal(persisted.refreshToken, "saved-refresh");
-});
-
-test("OAuth provider clears an expired credential when refresh is rejected", async () => {
-  const store = new MemorySecretStore();
-  await store.set("t3-connect-oauth", JSON.stringify({
-    accessToken: "expired-access",
-    refreshToken: "expired-refresh",
-    expiresAtEpochMs: Date.now() - 1,
-  }));
-  const provider = new LoopbackOAuthProvider({
-    store,
-    fetch: async () => new Response("{}", { status: 401 }),
-  });
-
-  const status = await provider.initialize();
-  assert.equal(status.phase, "signedOut");
-  assert.match(status.detail ?? "", /expired/u);
-  assert.equal(await store.get("t3-connect-oauth"), null);
-});
 
 test("native Clerk browser flow returns a relay-audienced session credential", async () => {
   const store = new MemorySecretStore();

@@ -272,6 +272,10 @@ test("thread composer pastes, previews, removes, and sends clipboard screenshots
   assert.match(composer, /function removeAttachment\(index\)[\s\S]*service\.discardAttachment/u);
   assert.match(composer, /service\.send\([\s\S]*environmentId[\s\S]*attachmentIds, function\(ok, result\)/u);
   assert.match(composer, /prompt\.text\.trim\(\)\.length > 0 \|\| root\.attachments\.length > 0/u);
+  assert.match(
+    composer,
+    /function modelOptions\(\)[\s\S]*threadData\.environmentId[\s\S]*values\[i\]\.environmentId/u,
+  );
   assert.match(service, /request\("attachment\.clipboard\.read"/u);
   assert.match(service, /payload\.attachmentIds = attachmentIds/u);
   assert.match(service, /environmentId: environmentId/u);
