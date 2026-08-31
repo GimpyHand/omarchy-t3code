@@ -377,8 +377,8 @@ test("T3 callback handler temporarily preserves an existing desktop owner", asyn
   assert(calls.some((args) => args.join(" ").includes("x-scheme-handler/t3code")));
 });
 
-test("legacy callback ownership is restored after the login window", async () => {
-  let current = "io.github.omarchy-t3code-callback.desktop";
+test("previous callback ownership is restored after the login window", async () => {
+  let current = "t3code-nightly.desktop";
   const command: MimeCommand = async (args) => {
     if (args[0] === "query") return { code: 0, stdout: `${current}\n`, stderr: "" };
     current = args[1] ?? "";
@@ -390,7 +390,7 @@ test("legacy callback ownership is restored after the login window", async () =>
   });
   assert.equal(current, "bralyx.t3code-callback.desktop");
   await restore();
-  assert.equal(current, "io.github.omarchy-t3code-callback.desktop");
+  assert.equal(current, "t3code-nightly.desktop");
 });
 
 test("callback handler clears a newly created default before removing its desktop entry", async () => {
@@ -459,14 +459,13 @@ test("clearing an ephemeral callback default preserves other MIME owners", async
   }
 });
 
-test("Secret Service values migrate from the development application ID", async () => {
-  const currentApplication = "bralyx.t3code";
-  const legacyApplication = "io.github.omarchy-t3code";
-  const values = new Map([[`${legacyApplication}:t3-connect-clerk-client`, "saved-client-token"]]);
+test("Secret Service store reads and clears values for the current application", async () => {
+  const application = "bralyx.t3code";
+  const values = new Map<string, string>();
   const tool: SecretToolRunner = async (args, input) => {
-    const application = args[args.indexOf("application") + 1] ?? "";
+    const itemApplication = args[args.indexOf("application") + 1] ?? "";
     const item = args[args.indexOf("item") + 1] ?? "";
-    const key = `${application}:${item}`;
+    const key = `${itemApplication}:${item}`;
     if (args[0] === "lookup") {
       const value = values.get(key);
       return value === undefined
@@ -483,10 +482,11 @@ test("Secret Service values migrate from the development application ID", async 
     }
     throw new Error(`Unexpected secret-tool operation ${args[0]}.`);
   };
-  const store = new SecretServiceStore(currentApplication, [legacyApplication], tool);
+  const store = new SecretServiceStore(application, tool);
+  assert.equal(await store.get("t3-connect-clerk-client"), null);
+  await store.set("t3-connect-clerk-client", "saved-client-token");
   assert.equal(await store.get("t3-connect-clerk-client"), "saved-client-token");
-  assert.equal(values.get(`${currentApplication}:t3-connect-clerk-client`), "saved-client-token");
-  assert.equal(values.has(`${legacyApplication}:t3-connect-clerk-client`), false);
+  assert.equal(values.get(`${application}:t3-connect-clerk-client`), "saved-client-token");
   await store.remove("t3-connect-clerk-client");
   assert.equal(values.size, 0);
 });

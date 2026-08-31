@@ -22,8 +22,7 @@ standalone.
 - Bar status color dot (offline / ready / working / attention) beside the T3
   mark.
 - Exact T3 Nightly compatibility pin, standalone Linux packaging, license
-  inventory, checksummed marketplace runtime, installer, and uninstaller with
-  legacy-id migration.
+  inventory, checksummed marketplace runtime, installer, and uninstaller.
 
 ### Changed
 

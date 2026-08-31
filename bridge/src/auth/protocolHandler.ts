@@ -7,13 +7,6 @@ import { isAbsolute, join, resolve } from "node:path";
 import { BridgeError, redactText } from "../security/redact.ts";
 
 export const CALLBACK_DESKTOP_ID = "bralyx.t3code-callback.desktop";
-export const LEGACY_CALLBACK_DESKTOP_IDS = [
-  "io.github.gimpyhand.omarchy-t3code-callback.desktop",
-  "io.github.digitalpals.omarchy-t3code-callback.desktop",
-  "io.github.omarchy-t3code-callback.desktop",
-] as const;
-/** @deprecated Prefer LEGACY_CALLBACK_DESKTOP_IDS */
-export const LEGACY_CALLBACK_DESKTOP_ID = LEGACY_CALLBACK_DESKTOP_IDS[2];
 const T3_SCHEME_MIME = "x-scheme-handler/t3code";
 
 interface CommandResult {

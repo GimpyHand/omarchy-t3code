@@ -2,7 +2,6 @@
 set -eu
 
 plugin_id=bralyx.t3code
-legacy_plugin_ids="io.github.gimpyhand.omarchy-t3code io.github.digitalpals.omarchy-t3code io.github.omarchy-t3code"
 artifact_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 source_dir=$artifact_root/plugin
 omarchy_command=${OMARCHY_COMMAND:-omarchy}
@@ -20,7 +19,6 @@ target=$plugins_root/$plugin_id
 stage=$plugins_root/.$plugin_id.install-$$
 backup_root=$plugins_root/.backups
 backup=
-backup_source=
 
 cleanup() {
   if [ -d "$stage" ]; then rm -r -- "$stage"; fi
@@ -30,44 +28,24 @@ trap cleanup EXIT HUP INT TERM
 mkdir -p -m 700 "$plugins_root"
 cp -a -- "$source_dir" "$stage"
 
-backup_source=
 if [ -e "$target" ]; then
-  backup_source=$target
-else
-  for legacy_plugin_id in $legacy_plugin_ids; do
-    if [ -e "$plugins_root/$legacy_plugin_id" ]; then
-      backup_source=$plugins_root/$legacy_plugin_id
-      break
-    fi
-  done
-fi
-
-if [ -n "$backup_source" ]; then
   mkdir -p -m 700 "$backup_root"
   backup=$backup_root/$plugin_id-$(date -u +%Y%m%dT%H%M%SZ)-$$
-  mv -- "$backup_source" "$backup"
+  mv -- "$target" "$backup"
 fi
 
 if ! mv -- "$stage" "$target"; then
-  if [ -n "$backup" ] && [ ! -e "$backup_source" ]; then mv -- "$backup" "$backup_source"; fi
+  if [ -n "$backup" ]; then mv -- "$backup" "$target"; fi
   exit 1
 fi
 
-# Older plugin IDs may exist beside a newer installation. Once the new target
-# is safely in place, remove only those exact obsolete directories.
-for legacy_plugin_id in $legacy_plugin_ids; do
-  if [ -e "$plugins_root/$legacy_plugin_id" ]; then rm -r -- "$plugins_root/$legacy_plugin_id"; fi
-done
-
 if [ -n "$backup" ]; then
   find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
-    \( -name "$plugin_id-*" -o -name "io.github.gimpyhand.omarchy-t3code-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
-    ! -path "$backup" -exec rm -r -- {} +
+    -name "$plugin_id-*" ! -path "$backup" -exec rm -r -- {} +
   echo "Previous installation retained at $backup"
 elif [ -d "$backup_root" ]; then
   find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
-    \( -name "$plugin_id-*" -o -name "io.github.gimpyhand.omarchy-t3code-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
-    -exec rm -r -- {} +
+    -name "$plugin_id-*" -exec rm -r -- {} +
 fi
 
 if "$omarchy_command" shell -q shell ping >/dev/null 2>&1; then

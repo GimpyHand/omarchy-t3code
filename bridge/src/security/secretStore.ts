@@ -9,11 +9,6 @@ export interface SecretStore {
 }
 
 export const SECRET_SERVICE_APPLICATION = "bralyx.t3code";
-export const LEGACY_SECRET_SERVICE_APPLICATIONS = [
-  "io.github.gimpyhand.omarchy-t3code",
-  "io.github.digitalpals.omarchy-t3code",
-  "io.github.omarchy-t3code",
-] as const;
 
 export interface SecretToolResult {
   code: number | null;
@@ -63,24 +58,20 @@ function runSecretTool(args: string[], input?: string): Promise<SecretToolResult
 }
 
 export class SecretServiceStore implements SecretStore {
-  private readonly legacyApplications: readonly string[];
   private readonly tool: SecretToolRunner;
 
   constructor(
     private readonly application = SECRET_SERVICE_APPLICATION,
-    legacyApplications?: readonly string[],
     tool: SecretToolRunner = runSecretTool,
   ) {
-    this.legacyApplications = legacyApplications
-      ?? (application === SECRET_SERVICE_APPLICATION ? [...LEGACY_SECRET_SERVICE_APPLICATIONS] : []);
     this.tool = tool;
   }
 
-  private async lookup(application: string, key: string): Promise<string | null> {
+  private async lookup(key: string): Promise<string | null> {
     const result = await this.tool([
       "lookup",
       "application",
-      application,
+      this.application,
       "item",
       key,
     ]);
@@ -95,35 +86,8 @@ export class SecretServiceStore implements SecretStore {
     return result.stdout.replace(/\r?\n$/u, "");
   }
 
-  private async removeFrom(application: string, key: string): Promise<void> {
-    const result = await this.tool([
-      "clear",
-      "application",
-      application,
-      "item",
-      key,
-    ]);
-    if (result.code !== 0 && result.code !== 1) {
-      throw new BridgeError(
-        "SECRET_STORE_REMOVE_FAILED",
-        `Could not clear the desktop secret store: ${redactText(result.stderr)}`,
-        true,
-      );
-    }
-  }
-
   async get(key: string): Promise<string | null> {
-    const current = await this.lookup(this.application, key);
-    if (current !== null) return current;
-    for (const legacyApplication of this.legacyApplications) {
-      const legacy = await this.lookup(legacyApplication, key);
-      if (legacy !== null) {
-        await this.set(key, legacy);
-        await this.removeFrom(legacyApplication, key).catch(() => undefined);
-        return legacy;
-      }
-    }
-    return null;
+    return this.lookup(key);
   }
 
   async set(key: string, value: string): Promise<void> {
@@ -148,9 +112,19 @@ export class SecretServiceStore implements SecretStore {
   }
 
   async remove(key: string): Promise<void> {
-    await this.removeFrom(this.application, key);
-    for (const legacyApplication of this.legacyApplications) {
-      await this.removeFrom(legacyApplication, key);
+    const result = await this.tool([
+      "clear",
+      "application",
+      this.application,
+      "item",
+      key,
+    ]);
+    if (result.code !== 0 && result.code !== 1) {
+      throw new BridgeError(
+        "SECRET_STORE_REMOVE_FAILED",
+        `Could not clear the desktop secret store: ${redactText(result.stderr)}`,
+        true,
+      );
     }
   }
 }

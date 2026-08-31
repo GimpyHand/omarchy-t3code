@@ -2,9 +2,7 @@
 set -eu
 
 plugin_id=bralyx.t3code
-legacy_plugin_ids="io.github.gimpyhand.omarchy-t3code io.github.digitalpals.omarchy-t3code io.github.omarchy-t3code"
 callback_id=bralyx.t3code-callback.desktop
-legacy_callback_ids="io.github.gimpyhand.omarchy-t3code-callback.desktop io.github.digitalpals.omarchy-t3code-callback.desktop io.github.omarchy-t3code-callback.desktop"
 omarchy_command=${OMARCHY_COMMAND:-omarchy}
 keep_secrets=false
 
@@ -39,19 +37,12 @@ if "$omarchy_command" shell -q shell ping >/dev/null 2>&1; then
 fi
 
 rm -r -f -- "$plugins_root/$plugin_id"
-for legacy_plugin_id in $legacy_plugin_ids; do
-  rm -r -f -- "$plugins_root/$legacy_plugin_id"
-done
 rm -f -- "$applications_root/$callback_id"
-for legacy_callback_id in $legacy_callback_ids; do
-  rm -f -- "$applications_root/$legacy_callback_id"
-done
 rm -r -f -- "$state_root/omarchy-t3code"
 
 if [ -d "$plugins_root/.backups" ]; then
   find "$plugins_root/.backups" -mindepth 1 -maxdepth 1 -type d \
-    \( -name "$plugin_id-*" -o -name "io.github.gimpyhand.omarchy-t3code-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
-    -exec rm -r -- {} +
+    -name "$plugin_id-*" -exec rm -r -- {} +
 fi
 
 for mimeapps in \
@@ -63,13 +54,7 @@ do
   mimeapps_tmp=$mimeapps.omarchy-t3code-$$
   sed \
     -e 's/bralyx\.t3code-callback\.desktop;//g' \
-    -e 's/io\.github\.gimpyhand\.omarchy-t3code-callback\.desktop;//g' \
-    -e 's/io\.github\.digitalpals\.omarchy-t3code-callback\.desktop;//g' \
-    -e 's/io\.github\.omarchy-t3code-callback\.desktop;//g' \
     -e 's/bralyx\.t3code-callback\.desktop$//g' \
-    -e 's/io\.github\.gimpyhand\.omarchy-t3code-callback\.desktop$//g' \
-    -e 's/io\.github\.digitalpals\.omarchy-t3code-callback\.desktop$//g' \
-    -e 's/io\.github\.omarchy-t3code-callback\.desktop$//g' \
     -e '/^x-scheme-handler\/t3code=$/d' \
     "$mimeapps" > "$mimeapps_tmp"
   chmod --reference="$mimeapps" "$mimeapps_tmp"
@@ -83,10 +68,8 @@ fi
 
 if [ "$keep_secrets" = false ]; then
   if command -v secret-tool >/dev/null 2>&1; then
-    for application in "$plugin_id" $legacy_plugin_ids; do
-      for item in t3-connect-clerk-client t3-connect-oauth t3-connect-native-callback relay-dpop-proof-key; do
-        secret-tool clear application "$application" item "$item" >/dev/null 2>&1 || true
-      done
+    for item in t3-connect-clerk-client t3-connect-oauth t3-connect-native-callback relay-dpop-proof-key; do
+      secret-tool clear application "$plugin_id" item "$item" >/dev/null 2>&1 || true
     done
   fi
   echo "Uninstalled $plugin_id and cleared its Secret Service entries."

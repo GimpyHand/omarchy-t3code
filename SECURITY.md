@@ -25,10 +25,10 @@ process and therefore shares the shell's trust level.
 - The only filesystem state is the selected environment preference. Its
   directory is created as `0700`, its temporary file as `0600`, and replacement
   is atomic.
-- Logout disconnects first and removes native Clerk plus legacy CLI OAuth
-  credentials. The DPoP device key remains stable, matching T3 client behavior;
-  remove the Secret Service item `relay-dpop-proof-key` to rotate it
-  deliberately.
+- Logout disconnects first and removes native Clerk credentials (and any
+  residual `t3-connect-oauth` Secret Service item). The DPoP device key remains
+  stable, matching T3 client behavior; remove the Secret Service item
+  `relay-dpop-proof-key` to rotate it deliberately.
 
 ## Browser authentication
 
@@ -55,9 +55,6 @@ The callback boundary:
   after owner restoration succeeds;
 - uses no pairing code, clipboard code, out-of-band code, or plaintext callback
   state.
-
-The legacy CLI provider retains its independently tested S256 PKCE/state
-implementation for compatibility work, but it is not selected by the bridge.
 
 ## Input, output, and logging
 
