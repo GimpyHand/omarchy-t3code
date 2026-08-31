@@ -1,0 +1,27 @@
+{
+  "name": "@omarchy-t3/bridge",
+  "version": "0.1.0",
+  "description": "Local T3 protocol adapter for the Omarchy T3 Command Center client.",
+  "private": true,
+  "type": "module",
+  "author": "Bralyx Digital",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GimpyHand/omarchy-t3code.git",
+    "directory": "bridge"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test ../tests/*.test.ts",
+    "test:compat": "node --import tsx --test ../tests/t3-compat.test.ts"
+  },
+  "dependencies": {
+    "@t3tools/client-runtime": "workspace:*",
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "effect": "catalog:",
+    "jose": "catalog:"
+  }
+}

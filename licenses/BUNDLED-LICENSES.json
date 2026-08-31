@@ -1,0 +1,75 @@
+{
+  "node": {
+    "version": "v24.13.1",
+    "license": "MIT",
+    "file": "NODEJS-LICENSE"
+  },
+  "packages": [
+    {
+      "name": "@noble/hashes",
+      "version": "1.8.0",
+      "license": "MIT",
+      "file": "noble-hashes-1.8.0-LICENSE"
+    },
+    {
+      "name": "detect-libc",
+      "version": "2.1.2",
+      "license": "Apache-2.0",
+      "file": "detect-libc-2.1.2-LICENSE"
+    },
+    {
+      "name": "effect",
+      "version": "4.0.0-beta.103",
+      "license": "MIT",
+      "file": "effect-4.0.0-beta.103-LICENSE"
+    },
+    {
+      "name": "fast-check",
+      "version": "4.9.0",
+      "license": "MIT",
+      "file": "fast-check-4.9.0-LICENSE"
+    },
+    {
+      "name": "find-my-way-ts",
+      "version": "0.1.6",
+      "license": "MIT",
+      "file": "find-my-way-ts-0.1.6-LICENSE"
+    },
+    {
+      "name": "jose",
+      "version": "6.2.2",
+      "license": "MIT",
+      "file": "jose-6.2.2-LICENSE"
+    },
+    {
+      "name": "msgpackr-extract",
+      "version": "3.0.4",
+      "license": "MIT",
+      "file": "msgpackr-extract-3.0.4-LICENSE"
+    },
+    {
+      "name": "msgpackr",
+      "version": "2.0.5",
+      "license": "MIT",
+      "file": "msgpackr-2.0.5-LICENSE"
+    },
+    {
+      "name": "multipasta",
+      "version": "0.2.8",
+      "license": "MIT",
+      "file": "multipasta-0.2.8-LICENSE"
+    },
+    {
+      "name": "node-gyp-build-optional-packages",
+      "version": "5.2.2",
+      "license": "MIT",
+      "file": "node-gyp-build-optional-packages-5.2.2-LICENSE"
+    },
+    {
+      "name": "pure-rand",
+      "version": "8.4.2",
+      "license": "MIT",
+      "file": "pure-rand-8.4.2-LICENSE"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: none
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Initialize the pinned T3 source
+        run: git submodule update --init upstream/t3code
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Match the release tag to project metadata
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: pnpm validate:repo
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm package
+      - run: cd dist && sha256sum -c omarchy-t3code-plugin.tar.gz.sha256
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              dist/omarchy-t3code-plugin.tar.gz \
+              dist/omarchy-t3code-plugin.tar.gz.sha256 \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              dist/omarchy-t3code-plugin.tar.gz \
+              dist/omarchy-t3code-plugin.tar.gz.sha256 \
+              --verify-tag \
+              --generate-notes \
+              --title "$GITHUB_REF_NAME"
+          fi

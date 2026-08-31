@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: none
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge:
+    name: Bridge, tests, and package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Initialize the pinned T3 source
+        run: git submodule update --init upstream/t3code
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm validate:repo
+      - run: pnpm validate:plugin
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm audit --prod --audit-level moderate
+      - run: pnpm package
+      - name: Verify the tracked marketplace runtime against the fresh source build
+        run: pnpm verify:marketplace-runtime
+      - name: Inspect release archive
+        run: |
+          tar -tzf dist/omarchy-t3code-plugin.tar.gz | sort > /tmp/archive-files
+          grep -Fx install /tmp/archive-files
+          grep -Fx uninstall /tmp/archive-files
+          grep -Fx plugin/THIRD_PARTY_NOTICES.md /tmp/archive-files
+          grep -Fx plugin/docs/ACCEPTANCE.md /tmp/archive-files
+          grep -Fx plugin/preview.png /tmp/archive-files
+          cd dist
+          sha256sum -c omarchy-t3code-plugin.tar.gz.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: omarchy-t3code-linux-x64
+          path: |
+            dist/omarchy-t3code-plugin.tar.gz
+            dist/omarchy-t3code-plugin.tar.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
+
+  qml:
+    name: Omarchy QML validation
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    timeout-minutes: 20
+    steps:
+      - name: Install the Arch/Quickshell validation environment
+        run: pacman -Syu --noconfirm --needed git jq nodejs qt6-declarative quickshell ripgrep
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Install the supported Omarchy shell source
+        run: |
+          git init /tmp/omarchy
+          git -C /tmp/omarchy remote add origin https://github.com/basecamp/omarchy.git
+          git -C /tmp/omarchy fetch --depth=1 origin f0020448ca87329199de7cb12f2015ebc4a3e5e7
+          git -C /tmp/omarchy checkout --detach FETCH_HEAD
+          ln -s /tmp/omarchy /usr/share/omarchy
+          echo /usr/share/omarchy/bin >> "$GITHUB_PATH"
+      - name: Validate the clean marketplace checkout
+        run: |
+          marketplace_tree=$(mktemp -d)
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git archive --format=tar HEAD | tar -xf - -C "$marketplace_tree"
+          omarchy plugin validate "$marketplace_tree"
+      - run: scripts/check-qml

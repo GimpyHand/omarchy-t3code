@@ -1,0 +1,52 @@
+{
+  "name": "omarchy-t3code",
+  "version": "0.1.0",
+  "description": "A compact native T3 Command Center client for Omarchy.",
+  "private": true,
+  "type": "module",
+  "author": "Bralyx Digital",
+  "license": "MIT",
+  "homepage": "https://github.com/GimpyHand/omarchy-t3code#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GimpyHand/omarchy-t3code.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GimpyHand/omarchy-t3code/issues"
+  },
+  "omarchy": {
+    "pluginId": "io.github.gimpyhand.omarchy-t3code"
+  },
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=24.13.1"
+  },
+  "scripts": {
+    "build": "pnpm --filter @omarchy-t3/bridge build",
+    "check": "pnpm validate:repo && pnpm typecheck && pnpm test && pnpm check:qml && pnpm build",
+    "check:qml": "scripts/check-qml",
+    "validate:plugin": "node scripts/validate-plugin.mjs",
+    "validate:repo": "node scripts/validate-repository.mjs",
+    "typecheck": "pnpm --filter @omarchy-t3/bridge typecheck",
+    "test": "pnpm --filter @omarchy-t3/bridge test",
+    "test:compat": "pnpm --filter @omarchy-t3/bridge test:compat",
+    "package": "node scripts/package.mjs",
+    "bundle:marketplace": "node scripts/bundle-marketplace-runtime.mjs && node scripts/verify-marketplace-runtime.mjs",
+    "verify:marketplace-runtime": "node scripts/verify-marketplace-runtime.mjs",
+    "install:plugin": "node scripts/install-plugin.mjs",
+    "uninstall:plugin": "scripts/uninstall-package",
+    "check:t3-nightly": "node scripts/check-t3-nightly.mjs",
+    "update:t3-nightly": "node scripts/update-t3-nightly.mjs"
+  },
+  "devDependencies": {
+    "@t3tools/client-runtime": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "@types/node": "24.13.3",
+    "effect": "catalog:",
+    "esbuild": "0.28.2",
+    "jose": "catalog:",
+    "postject": "1.0.0-alpha.6",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3"
+  }
+}

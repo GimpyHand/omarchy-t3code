@@ -1,0 +1,3 @@
+licenses/** -whitespace
+lib/*.gz binary
+preview.png binary

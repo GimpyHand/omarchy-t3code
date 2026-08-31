@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+if [ "${1:-} ${2:-}" = "plugin validate" ]; then
+  exec node "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)/scripts/validate-plugin.mjs" "$3"
+fi
+
+# Simulate a stopped shell so installation remains isolated from the desktop
+# running the test.
+if [ "${1:-}" = "shell" ]; then exit 1; fi
+exit 0

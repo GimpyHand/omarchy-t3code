@@ -1,0 +1,25 @@
+packages:
+  - bridge
+  - upstream/t3code/packages/contracts
+  - upstream/t3code/packages/client-runtime
+  - upstream/t3code/packages/shared
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+
+catalog:
+  "@effect/platform-node": 4.0.0-beta.103
+  "@effect/vitest": 4.0.0-beta.103
+  "@noble/curves": 1.9.1
+  "@noble/hashes": 1.8.0
+  "@types/node": 24.13.3
+  effect: 4.0.0-beta.103
+  jose: 6.2.2
+  typescript: 6.0.3
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.2
+  vite-plus: 0.2.2
+  yaml: ^2.9.0
+
+patchedDependencies:
+  effect@4.0.0-beta.103: upstream/t3code/patches/effect@4.0.0-beta.103.patch

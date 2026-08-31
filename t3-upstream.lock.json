@@ -1,0 +1,7 @@
+{
+  "channel": "nightly",
+  "tag": "v0.0.34-nightly.20260822.1160",
+  "commit": "2c4158f87a1b6a586d0aa5e0338f122cb7887c4f",
+  "publishedAt": "2026-08-22T15:18:35Z",
+  "repository": "https://github.com/pingdotgg/t3code.git"
+}

@@ -1,0 +1,59 @@
+name: T3 Nightly compatibility
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: none
+
+jobs:
+  newest-nightly:
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    timeout-minutes: 45
+    steps:
+      - name: Install the Arch/Quickshell validation environment
+        run: pacman -Syu --noconfirm --needed git jq nodejs npm qt6-declarative quickshell ripgrep
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Initialize the pinned T3 source
+        run: git submodule update --init upstream/t3code
+      - name: Install the supported Omarchy shell source
+        run: |
+          git init /tmp/omarchy
+          git -C /tmp/omarchy remote add origin https://github.com/basecamp/omarchy.git
+          git -C /tmp/omarchy fetch --depth=1 origin f0020448ca87329199de7cb12f2015ebc4a3e5e7
+          git -C /tmp/omarchy checkout --detach FETCH_HEAD
+          ln -s /tmp/omarchy /usr/share/omarchy
+          echo /usr/share/omarchy/bin >> "$GITHUB_PATH"
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Record available Nightly
+        run: node scripts/check-t3-nightly.mjs --json > nightly-report.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Move candidate pin and run its compatibility suite
+        run: node scripts/update-t3-nightly.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Verify the candidate or already-current pin
+        run: pnpm check
+      - name: Package the compatible candidate
+        run: pnpm package
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: t3-nightly-report
+          path: nightly-report.json
+          if-no-files-found: error

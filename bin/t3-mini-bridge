@@ -1,0 +1,51 @@
+#!/bin/sh
+set -eu
+
+plugin_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+runtime_dir=$plugin_root/lib/.runtime
+runtime=$runtime_dir/t3-mini-bridge
+runtime_archive=$plugin_root/lib/t3-mini-bridge-linux-x64.gz
+runtime_checksum=$plugin_root/lib/t3-mini-bridge-linux-x64.sha256
+
+if [ -x "$plugin_root/lib/t3-mini-bridge" ]; then
+  exec "$plugin_root/lib/t3-mini-bridge" "$@"
+fi
+
+if command -v node >/dev/null 2>&1 && [ -f "$plugin_root/lib/t3-mini-bridge.mjs" ]; then
+  exec node "$plugin_root/lib/t3-mini-bridge.mjs" "$@"
+fi
+
+if [ "$(uname -m)" != x86_64 ]; then
+  echo "The marketplace runtime currently supports x86-64 Linux only." >&2
+  echo "Build a native package from source for this machine." >&2
+  exit 126
+fi
+
+if [ ! -f "$runtime_archive" ] || [ ! -f "$runtime_checksum" ]; then
+  echo "T3 Command Center bridge is missing. Reinstall the Omarchy T3 Command Center plugin." >&2
+  exit 127
+fi
+
+expected_checksum=$(sed -n '1{s/[[:space:]].*$//;p;}' "$runtime_checksum")
+if [ -x "$runtime" ] && printf '%s  %s\n' "$expected_checksum" "$runtime" | sha256sum -c - >/dev/null 2>&1; then
+  exec "$runtime" "$@"
+fi
+
+mkdir -p -m 700 "$runtime_dir"
+runtime_stage=$(mktemp "$runtime_dir/.t3-mini-bridge.XXXXXX")
+cleanup() {
+  rm -f -- "$runtime_stage"
+}
+trap cleanup EXIT HUP INT TERM
+gzip -dc -- "$runtime_archive" > "$runtime_stage"
+if ! printf '%s  %s\n' "$expected_checksum" "$runtime_stage" | sha256sum -c - >/dev/null; then
+  echo "The bundled T3 mini bridge failed its integrity check." >&2
+  exit 1
+fi
+chmod 0755 "$runtime_stage"
+mv -f -- "$runtime_stage" "$runtime"
+trap - EXIT HUP INT TERM
+exec "$runtime" "$@"
+
+echo "T3 Command Center bridge is missing. Reinstall the Omarchy T3 Command Center plugin." >&2
+exit 127

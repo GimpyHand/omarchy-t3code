@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.gimpyhand.omarchy-t3code",
+  "name": "T3 Command Center",
+  "version": "0.1.0",
+  "author": "Bralyx Digital",
+  "license": "MIT",
+  "description": "A compact native T3 Command Center client for Omarchy — Inbox and threads without the full desktop app.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "qml/Service.qml",
+    "barWidget": "qml/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "T3 Command Center",
+    "description": "T3 Command Center connection and attention status",
+    "category": "Development",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

@@ -1,0 +1,93 @@
+#!/bin/sh
+set -eu
+
+plugin_id=io.github.gimpyhand.omarchy-t3code
+legacy_plugin_ids="io.github.digitalpals.omarchy-t3code io.github.omarchy-t3code"
+callback_id=io.github.gimpyhand.omarchy-t3code-callback.desktop
+legacy_callback_ids="io.github.digitalpals.omarchy-t3code-callback.desktop io.github.omarchy-t3code-callback.desktop"
+omarchy_command=${OMARCHY_COMMAND:-omarchy}
+keep_secrets=false
+
+case ${1:-} in
+  "") ;;
+  --keep-secrets) keep_secrets=true ;;
+  -h|--help)
+    echo "Usage: $0 [--keep-secrets]"
+    exit 0
+    ;;
+  *)
+    echo "Unknown option: $1" >&2
+    echo "Usage: $0 [--keep-secrets]" >&2
+    exit 2
+    ;;
+esac
+
+config_root=${XDG_CONFIG_HOME:-${HOME:?HOME is required}/.config}
+data_root=${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}
+state_root=${XDG_STATE_HOME:-${HOME:?HOME is required}/.local/state}
+plugins_root=$config_root/omarchy/plugins
+applications_root=$data_root/applications
+mimeapps_tmp=
+
+cleanup() {
+  if [ -n "$mimeapps_tmp" ] && [ -f "$mimeapps_tmp" ]; then rm -f -- "$mimeapps_tmp"; fi
+}
+trap cleanup EXIT HUP INT TERM
+
+if "$omarchy_command" shell -q shell ping >/dev/null 2>&1; then
+  "$omarchy_command" plugin disable "$plugin_id" >/dev/null 2>&1 || true
+fi
+
+rm -r -f -- "$plugins_root/$plugin_id"
+for legacy_plugin_id in $legacy_plugin_ids; do
+  rm -r -f -- "$plugins_root/$legacy_plugin_id"
+done
+rm -f -- "$applications_root/$callback_id"
+for legacy_callback_id in $legacy_callback_ids; do
+  rm -f -- "$applications_root/$legacy_callback_id"
+done
+rm -r -f -- "$state_root/omarchy-t3code"
+
+if [ -d "$plugins_root/.backups" ]; then
+  find "$plugins_root/.backups" -mindepth 1 -maxdepth 1 -type d \
+    \( -name "$plugin_id-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
+    -exec rm -r -- {} +
+fi
+
+for mimeapps in \
+  "$config_root/mimeapps.list" \
+  "$config_root/applications/mimeapps.list" \
+  "$applications_root/mimeapps.list"
+do
+  if [ ! -f "$mimeapps" ]; then continue; fi
+  mimeapps_tmp=$mimeapps.omarchy-t3code-$$
+  sed \
+    -e 's/io\.github\.gimpyhand\.omarchy-t3code-callback\.desktop;//g' \
+    -e 's/io\.github\.digitalpals\.omarchy-t3code-callback\.desktop;//g' \
+    -e 's/io\.github\.omarchy-t3code-callback\.desktop;//g' \
+    -e 's/io\.github\.gimpyhand\.omarchy-t3code-callback\.desktop$//g' \
+    -e 's/io\.github\.digitalpals\.omarchy-t3code-callback\.desktop$//g' \
+    -e 's/io\.github\.omarchy-t3code-callback\.desktop$//g' \
+    -e '/^x-scheme-handler\/t3code=$/d' \
+    "$mimeapps" > "$mimeapps_tmp"
+  chmod --reference="$mimeapps" "$mimeapps_tmp"
+  mv -- "$mimeapps_tmp" "$mimeapps"
+  mimeapps_tmp=
+done
+
+if command -v update-desktop-database >/dev/null 2>&1 && [ -d "$applications_root" ]; then
+  update-desktop-database "$applications_root" >/dev/null 2>&1 || true
+fi
+
+if [ "$keep_secrets" = false ]; then
+  if command -v secret-tool >/dev/null 2>&1; then
+    for application in "$plugin_id" $legacy_plugin_ids; do
+      for item in t3-connect-clerk-client t3-connect-oauth t3-connect-native-callback relay-dpop-proof-key; do
+        secret-tool clear application "$application" item "$item" >/dev/null 2>&1 || true
+      done
+    done
+  fi
+  echo "Uninstalled $plugin_id and cleared its Secret Service entries."
+else
+  echo "Uninstalled $plugin_id and retained its Secret Service entries."
+fi
