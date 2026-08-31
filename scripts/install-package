@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-plugin_id=io.github.gimpyhand.omarchy-t3code
-legacy_plugin_ids="io.github.digitalpals.omarchy-t3code io.github.omarchy-t3code"
+plugin_id=bralyx.t3code
+legacy_plugin_ids="io.github.gimpyhand.omarchy-t3code io.github.digitalpals.omarchy-t3code io.github.omarchy-t3code"
 artifact_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 source_dir=$artifact_root/plugin
 omarchy_command=${OMARCHY_COMMAND:-omarchy}
@@ -61,12 +61,12 @@ done
 
 if [ -n "$backup" ]; then
   find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
-    \( -name "$plugin_id-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
+    \( -name "$plugin_id-*" -o -name "io.github.gimpyhand.omarchy-t3code-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
     ! -path "$backup" -exec rm -r -- {} +
   echo "Previous installation retained at $backup"
 elif [ -d "$backup_root" ]; then
   find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
-    \( -name "$plugin_id-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
+    \( -name "$plugin_id-*" -o -name "io.github.gimpyhand.omarchy-t3code-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
     -exec rm -r -- {} +
 fi
 

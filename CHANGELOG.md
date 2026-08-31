@@ -28,7 +28,7 @@ standalone.
 ### Changed
 
 - Product branding to T3 Command Center; plugin id
-  `io.github.gimpyhand.omarchy-t3code`.
+  `bralyx.t3code`.
 - Create-form label vs value contrast; phase labels aligned with popup text
   color; richer thread metadata chips (system, project, branch, model, time).
 - Removed unused CLI loopback OAuth provider; native Clerk remains the only

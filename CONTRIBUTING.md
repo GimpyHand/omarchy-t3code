@@ -29,8 +29,9 @@ tests, issues, or fixtures.
 `dist/plugin` and `dist/omarchy-t3code-plugin.tar.gz`. To install that result
 from a source checkout on Omarchy, run `pnpm install:plugin`. The installer
 atomically replaces the plugin, rescans the shell, enables the widget on first
-install, preserves its position on updates, migrates the earlier
-`io.github.omarchy-t3code` development ID, and retains at most one rollback
+install, preserves its position on updates, migrates earlier plugin IDs
+(`io.github.gimpyhand.omarchy-t3code`, `io.github.digitalpals.omarchy-t3code`,
+`io.github.omarchy-t3code`), and retains at most one rollback
 copy under the registry-ignored `.backups/` directory.
 
 ## Marketplace runtime provenance

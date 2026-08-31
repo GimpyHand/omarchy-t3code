@@ -23,7 +23,7 @@ Expected self-test output contains the current plugin version, protocol version
 Confirm the widget is enabled:
 
 ```bash
-omarchy plugin list --json | jq '.[] | select(.id == "io.github.gimpyhand.omarchy-t3code")'
+omarchy plugin list --json | jq '.[] | select(.id == "bralyx.t3code")'
 ```
 
 ## Native T3 Connect sign-in and automatic return

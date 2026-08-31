@@ -111,7 +111,7 @@ test("input-required attention uses one orange state color", async () => {
 
 test("auth completion automatically summons the panel at Inbox", async () => {
   const service = await readFile(join(root, "qml", "Service.qml"), "utf8");
-  assert.match(service, /case "auth\.completed"[\s\S]*shell\.summon\("io\.github\.gimpyhand\.omarchy-t3code", JSON\.stringify\(\{ route: "inbox" \}\)\)/u);
+  assert.match(service, /case "auth\.completed"[\s\S]*shell\.summon\("bralyx\.t3code", JSON\.stringify\(\{ route: "inbox" \}\)\)/u);
 });
 
 test("T3 mark preserves the upstream SVG winding fill", async () => {

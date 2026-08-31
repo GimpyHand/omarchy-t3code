@@ -370,7 +370,7 @@ test("T3 callback handler temporarily preserves an existing desktop owner", asyn
     command,
     registerDesktop: async () => async () => { desktopRemoved = true; },
   });
-  assert.equal(current, "io.github.gimpyhand.omarchy-t3code-callback.desktop");
+  assert.equal(current, "bralyx.t3code-callback.desktop");
   await restore();
   assert.equal(current, "t3code-nightly.desktop");
   assert.equal(desktopRemoved, true);
@@ -388,7 +388,7 @@ test("legacy callback ownership is restored after the login window", async () =>
     command,
     registerDesktop: async () => async () => undefined,
   });
-  assert.equal(current, "io.github.gimpyhand.omarchy-t3code-callback.desktop");
+  assert.equal(current, "bralyx.t3code-callback.desktop");
   await restore();
   assert.equal(current, "io.github.omarchy-t3code-callback.desktop");
 });
@@ -407,7 +407,7 @@ test("callback handler clears a newly created default before removing its deskto
     clearDefault: async () => { current = ""; cleared = true; },
     registerDesktop: async () => async () => { removed = true; },
   });
-  assert.equal(current, "io.github.gimpyhand.omarchy-t3code-callback.desktop");
+  assert.equal(current, "bralyx.t3code-callback.desktop");
   await restore();
   assert.equal(current, "");
   assert.equal(cleared, true);
@@ -417,7 +417,7 @@ test("callback handler clears a newly created default before removing its deskto
 test("callback desktop registration is hidden, quoted, and removed after login", async () => {
   const root = await mkdtemp(join(tmpdir(), "t3-callback-desktop-"));
   const data = join(root, "data");
-  const desktop = join(data, "applications", "io.github.gimpyhand.omarchy-t3code-callback.desktop");
+  const desktop = join(data, "applications", "bralyx.t3code-callback.desktop");
   try {
     const removeDesktop = await installT3CallbackDesktop(
       { HOME: root, XDG_CONFIG_HOME: join(root, "config"), XDG_DATA_HOME: data },
@@ -442,25 +442,25 @@ test("clearing an ephemeral callback default preserves other MIME owners", async
     await mkdir(config, { recursive: true });
     await writeFile(mimeapps, [
       "[Default Applications]",
-      "x-scheme-handler/t3code=io.github.gimpyhand.omarchy-t3code-callback.desktop;t3code-nightly.desktop;",
+      "x-scheme-handler/t3code=bralyx.t3code-callback.desktop;t3code-nightly.desktop;",
       "text/plain=org.example.Editor.desktop;",
       "",
     ].join("\n"));
     await clearT3ProtocolDefault(
-      "io.github.gimpyhand.omarchy-t3code-callback.desktop",
+      "bralyx.t3code-callback.desktop",
       { HOME: root, XDG_CONFIG_HOME: config, XDG_DATA_HOME: join(root, "data") },
     );
     const contents = await readFile(mimeapps, "utf8");
     assert.match(contents, /^x-scheme-handler\/t3code=t3code-nightly\.desktop;$/mu);
     assert.match(contents, /^text\/plain=org\.example\.Editor\.desktop;$/mu);
-    assert.doesNotMatch(contents, /io\.github\.gimpyhand\.omarchy-t3code-callback/u);
+    assert.doesNotMatch(contents, /bralyx\.t3code-callback/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
 test("Secret Service values migrate from the development application ID", async () => {
-  const currentApplication = "io.github.gimpyhand.omarchy-t3code";
+  const currentApplication = "bralyx.t3code";
   const legacyApplication = "io.github.omarchy-t3code";
   const values = new Map([[`${legacyApplication}:t3-connect-clerk-client`, "saved-client-token"]]);
   const tool: SecretToolRunner = async (args, input) => {

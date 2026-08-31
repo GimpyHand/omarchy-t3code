@@ -8,8 +8,9 @@ export interface SecretStore {
   remove(key: string): Promise<void>;
 }
 
-export const SECRET_SERVICE_APPLICATION = "io.github.gimpyhand.omarchy-t3code";
+export const SECRET_SERVICE_APPLICATION = "bralyx.t3code";
 export const LEGACY_SECRET_SERVICE_APPLICATIONS = [
+  "io.github.gimpyhand.omarchy-t3code",
   "io.github.digitalpals.omarchy-t3code",
   "io.github.omarchy-t3code",
 ] as const;

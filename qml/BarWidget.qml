@@ -7,10 +7,10 @@ import "BarState.js" as BarState
 
 Ui.Panel {
   id: root
-  moduleName: "io.github.gimpyhand.omarchy-t3code"
-  ipcTarget: "io.github.gimpyhand.omarchy-t3code"
+  moduleName: "bralyx.t3code"
+  ipcTarget: "bralyx.t3code"
 
-  readonly property var t3: bar?.shell?.serviceFor("io.github.gimpyhand.omarchy-t3code")
+  readonly property var t3: bar?.shell?.serviceFor("bralyx.t3code")
   readonly property bool connected: t3 && t3.connectionPhase === "connected"
   readonly property bool hasAttention: t3 && t3.attentionCount > 0
   readonly property string stateText: BarState.stateLabel(t3)

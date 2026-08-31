@@ -3,7 +3,7 @@
 Compact native [Omarchy](https://omarchy.org/) / Quickshell client for
 [T3 Code](https://t3.gg/) — Inbox and threads without the full desktop app.
 
-Published by **Bralyx Digital** as `io.github.gimpyhand.omarchy-t3code`.
+Published by **Bralyx Digital** as `bralyx.t3code`.
 
 ![T3 Command Center Inbox on Omarchy](docs/screenshots/desktop.png)
 
@@ -41,8 +41,8 @@ Omarchy warns that plugins run unsandboxed, clones this repo, validates the
 manifest, and enables the plugin. No Node or pnpm needed at runtime.
 
 ```bash
-omarchy plugin update io.github.gimpyhand.omarchy-t3code
-omarchy bar put io.github.gimpyhand.omarchy-t3code --section right --index 0
+omarchy plugin update bralyx.t3code
+omarchy bar put bralyx.t3code --section right --index 0
 ```
 
 Or use a release archive:
@@ -68,7 +68,7 @@ Other Linux arches can build a native bridge from source.
 From an installed checkout:
 
 ```bash
-~/.config/omarchy/plugins/io.github.gimpyhand.omarchy-t3code/uninstall
+~/.config/omarchy/plugins/bralyx.t3code/uninstall
 ```
 
 From a release archive (same directory as `install`):

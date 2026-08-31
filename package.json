@@ -15,7 +15,7 @@
     "url": "https://github.com/GimpyHand/omarchy-t3code/issues"
   },
   "omarchy": {
-    "pluginId": "io.github.gimpyhand.omarchy-t3code"
+    "pluginId": "bralyx.t3code"
   },
   "packageManager": "pnpm@11.10.0",
   "engines": {

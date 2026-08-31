@@ -1,10 +1,10 @@
 #!/bin/sh
 set -eu
 
-plugin_id=io.github.gimpyhand.omarchy-t3code
-legacy_plugin_ids="io.github.digitalpals.omarchy-t3code io.github.omarchy-t3code"
-callback_id=io.github.gimpyhand.omarchy-t3code-callback.desktop
-legacy_callback_ids="io.github.digitalpals.omarchy-t3code-callback.desktop io.github.omarchy-t3code-callback.desktop"
+plugin_id=bralyx.t3code
+legacy_plugin_ids="io.github.gimpyhand.omarchy-t3code io.github.digitalpals.omarchy-t3code io.github.omarchy-t3code"
+callback_id=bralyx.t3code-callback.desktop
+legacy_callback_ids="io.github.gimpyhand.omarchy-t3code-callback.desktop io.github.digitalpals.omarchy-t3code-callback.desktop io.github.omarchy-t3code-callback.desktop"
 omarchy_command=${OMARCHY_COMMAND:-omarchy}
 keep_secrets=false
 
@@ -50,7 +50,7 @@ rm -r -f -- "$state_root/omarchy-t3code"
 
 if [ -d "$plugins_root/.backups" ]; then
   find "$plugins_root/.backups" -mindepth 1 -maxdepth 1 -type d \
-    \( -name "$plugin_id-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
+    \( -name "$plugin_id-*" -o -name "io.github.gimpyhand.omarchy-t3code-*" -o -name "io.github.digitalpals.omarchy-t3code-*" -o -name "io.github.omarchy-t3code-*" \) \
     -exec rm -r -- {} +
 fi
 
@@ -62,9 +62,11 @@ do
   if [ ! -f "$mimeapps" ]; then continue; fi
   mimeapps_tmp=$mimeapps.omarchy-t3code-$$
   sed \
+    -e 's/bralyx\.t3code-callback\.desktop;//g' \
     -e 's/io\.github\.gimpyhand\.omarchy-t3code-callback\.desktop;//g' \
     -e 's/io\.github\.digitalpals\.omarchy-t3code-callback\.desktop;//g' \
     -e 's/io\.github\.omarchy-t3code-callback\.desktop;//g' \
+    -e 's/bralyx\.t3code-callback\.desktop$//g' \
     -e 's/io\.github\.gimpyhand\.omarchy-t3code-callback\.desktop$//g' \
     -e 's/io\.github\.digitalpals\.omarchy-t3code-callback\.desktop$//g' \
     -e 's/io\.github\.omarchy-t3code-callback\.desktop$//g' \

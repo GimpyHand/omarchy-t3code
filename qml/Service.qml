@@ -131,7 +131,7 @@ Item {
         authDetail = String(payload.detail || "")
         authCompleted()
         if (shell && typeof shell.summon === "function")
-          shell.summon("io.github.gimpyhand.omarchy-t3code", JSON.stringify({ route: "inbox" }))
+          shell.summon("bralyx.t3code", JSON.stringify({ route: "inbox" }))
         break
       case "connection.changed":
         connectionPhase = String(payload.phase || "disconnected")
