@@ -3,6 +3,14 @@
 All notable user-visible changes are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-09-01
+
+### Security
+
+- Enforce application-level caps on retained T3 shell/thread snapshots and on
+  bridge ↔ QML NDJSON payloads so hostile or oversized remote data cannot
+  exhaust bridge or Quickshell memory.
+
 ## [1.0.0] - 2026-08-31
 
 First public release of **T3 Command Center** by Bralyx Digital — a compact

@@ -165,8 +165,13 @@ Item {
   }
 
   function handleLine(line) {
+    var text = String(line)
+    if (text.length > 524288) {
+      lastError = "The T3 bridge sent an oversized update."
+      return
+    }
     var message
-    try { message = JSON.parse(String(line)) }
+    try { message = JSON.parse(text) }
     catch (error) { lastError = "The T3 bridge returned malformed data."; return }
     if (!message || message.protocolVersion !== 1) return
     if (message.type === "response") handleResponse(message)

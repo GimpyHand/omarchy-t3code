@@ -24,6 +24,7 @@ import * as Socket from "effect/unstable/socket/Socket";
 import * as RpcSessionUpstream from "../../../upstream/t3code/packages/client-runtime/src/rpc/session.ts";
 import type { InboxDto, ThreadDto } from "../protocol/types.ts";
 import { BridgeError, redactText } from "../security/redact.ts";
+import { boundMessageDelta } from "./bounds.ts";
 import { T3Projection } from "./projection.ts";
 
 type RuntimeFiber = Fiber.Fiber<unknown, unknown>;
@@ -78,9 +79,13 @@ export function deriveMessageStreamEvents(
   for (const message of afterThread.messages) {
     const prior = before.get(message.id);
     if (message.streaming && prior && message.text.startsWith(prior.text) && message.text.length > prior.text.length) {
-      deltas.push({ threadId, messageId: message.id, delta: message.text.slice(prior.text.length) });
+      deltas.push(boundMessageDelta({
+        threadId,
+        messageId: message.id,
+        delta: message.text.slice(prior.text.length),
+      }));
     } else if (message.streaming && !prior && message.text.length > 0) {
-      deltas.push({ threadId, messageId: message.id, delta: message.text });
+      deltas.push(boundMessageDelta({ threadId, messageId: message.id, delta: message.text }));
     }
     if (!message.streaming && prior?.streaming === true) completed.push({ threadId, messageId: message.id });
   }

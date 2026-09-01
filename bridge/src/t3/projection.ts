@@ -1,6 +1,7 @@
 import {
   type ModelSelection,
   type OrchestrationShellSnapshot,
+  type OrchestrationShellStreamEvent,
   type OrchestrationShellStreamItem,
   type OrchestrationThread,
   type OrchestrationThreadShell,
@@ -33,6 +34,10 @@ import type {
   ThreadSummaryDto,
 } from "../protocol/types.ts";
 import { BridgeError } from "../security/redact.ts";
+import {
+  boundShellStreamItem,
+  boundThread,
+} from "./bounds.ts";
 import { derivePendingApprovals, derivePendingInputs } from "./pending.ts";
 
 function capabilities(config: ServerConfig): CapabilitiesDto {
@@ -253,12 +258,13 @@ export class T3Projection {
 
   applyShell(item: OrchestrationShellStreamItem): boolean {
     if (item.kind === "synchronized") return false;
-    if (item.kind === "snapshot") {
-      this.shell = item.snapshot;
+    const bounded = boundShellStreamItem(item);
+    if (bounded.kind === "snapshot") {
+      this.shell = bounded.snapshot;
       return true;
     }
     if (this.shell === null) return false;
-    const next = applyShellStreamEvent(this.shell, item);
+    const next = applyShellStreamEvent(this.shell, bounded as OrchestrationShellStreamEvent);
     const changed = next !== this.shell;
     this.shell = next;
     return changed;
@@ -267,7 +273,7 @@ export class T3Projection {
   applyThread(item: OrchestrationThreadStreamItem): boolean {
     if (item.kind === "synchronized") return false;
     if (item.kind === "snapshot") {
-      this.thread = item.snapshot.thread;
+      this.thread = boundThread(item.snapshot.thread);
       return true;
     }
     if (this.thread === null) return false;

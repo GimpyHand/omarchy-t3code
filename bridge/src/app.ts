@@ -6,6 +6,7 @@ import { NdjsonChannel, type NdjsonHandler } from "./ipc/ndjson.ts";
 import { event, failure, success } from "./protocol/output.ts";
 import { PROTOCOL_VERSION, type BridgeRequest } from "./protocol/types.ts";
 import { asBridgeError, BridgeError } from "./security/redact.ts";
+import { boundIpcEvent, fitsIpcPayload, MAX_IPC_JSON_BYTES } from "./t3/bounds.ts";
 import { MemorySecretStore, SecretServiceStore } from "./security/secretStore.ts";
 import { T3Commands } from "./t3/commands.ts";
 import { DpopKeyManager } from "./t3/dpop.ts";
@@ -70,7 +71,17 @@ export class BridgeApp implements NdjsonHandler {
   }
 
   private emit(name: string, payload: unknown): void {
-    this.channel.write(event(name, payload));
+    const boundedPayload = boundIpcEvent(name, payload);
+    const output = event(name, boundedPayload);
+    if (!fitsIpcPayload(output)) {
+      this.emitError(new BridgeError(
+        "IPC_PAYLOAD_TOO_LARGE",
+        `The ${name} update exceeded the ${MAX_IPC_JSON_BYTES}-byte IPC limit and was dropped.`,
+        true,
+      ));
+      return;
+    }
+    this.channel.write(output);
   }
 
   private emitError(error: unknown): void {
@@ -144,7 +155,7 @@ export class BridgeApp implements NdjsonHandler {
           if (this.connection.status().phase !== "connected" && this.connection.mergedInbox().projects.length === 0) {
             throw new BridgeError("ENVIRONMENT_REQUIRED", "Connect to a T3 environment first.");
           }
-          payload = this.connection.mergedInbox();
+          payload = boundIpcEvent("inbox.changed", this.connection.mergedInbox());
           break;
         case "thread.open":
           await this.connection.openThread(String(request.payload.environmentId), String(request.payload.threadId));
