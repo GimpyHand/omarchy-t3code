@@ -35,6 +35,7 @@ import type {
 } from "../protocol/types.ts";
 import { BridgeError } from "../security/redact.ts";
 import {
+  boundShellSnapshot,
   boundShellStreamItem,
   boundThread,
 } from "./bounds.ts";
@@ -266,7 +267,7 @@ export class T3Projection {
     if (this.shell === null) return false;
     const next = applyShellStreamEvent(this.shell, bounded as OrchestrationShellStreamEvent);
     const changed = next !== this.shell;
-    this.shell = next;
+    this.shell = boundShellSnapshot(next);
     return changed;
   }
 
@@ -283,7 +284,7 @@ export class T3Projection {
       return true;
     }
     if (reduced.kind === "updated") {
-      this.thread = reduced.thread;
+      this.thread = boundThread(reduced.thread);
       return true;
     }
     return false;

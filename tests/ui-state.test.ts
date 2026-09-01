@@ -362,7 +362,8 @@ test("packaging uses an ephemeral callback handler that forwards URI arguments",
   const installer = await readFile(join(root, "scripts", "deploy-package"), "utf8");
   const sourceInstaller = await readFile(join(root, "scripts", "deploy-dev-plugin.mjs"), "utf8");
   const uninstaller = await readFile(join(root, "scripts", "remove-package"), "utf8");
-  assert.match(launcher, /exec "\$plugin_root\/lib\/t3-mini-bridge" "\$@"/u);
+  assert.match(launcher, /run_bridge "\$plugin_root\/lib\/t3-mini-bridge" "\$@"/u);
+  assert.match(launcher, /ndjson-line-relay/u);
   assert.match(callback, /NoDisplay=true/u);
   assert.match(callback, /--oauth-callback %u/u);
   assert.match(callback, /await removeDesktop\(\)/u);

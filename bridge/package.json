@@ -1,6 +1,6 @@
 {
   "name": "@omarchy-t3/bridge",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Local T3 protocol adapter for the Omarchy T3 Command Center client.",
   "private": true,
   "type": "module",

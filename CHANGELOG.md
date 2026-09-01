@@ -3,6 +3,15 @@
 All notable user-visible changes are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-09-01
+
+### Security
+
+- Re-bound shell/thread state after every stream reducer event, not only initial
+  snapshots; strip unbounded activity payloads and nested retained fields.
+- Select newest shell rows without sorting unbounded remote arrays; cap NDJSON
+  line length at the bridge launcher before Quickshell parses stdout.
+
 ## [1.0.1] - 2026-09-01
 
 ### Security

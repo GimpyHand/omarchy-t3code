@@ -6,13 +6,24 @@ runtime_dir=$plugin_root/lib/.runtime
 runtime=$runtime_dir/t3-mini-bridge
 runtime_archive=$plugin_root/lib/t3-mini-bridge-linux-x64.gz
 runtime_checksum=$plugin_root/lib/t3-mini-bridge-linux-x64.sha256
+relay=$plugin_root/scripts/ndjson-line-relay
+
+run_bridge() {
+  bridge_bin=$1
+  shift
+  if [ -f "$relay" ] && command -v python3 >/dev/null 2>&1; then
+    "$bridge_bin" "$@" | python3 "$relay"
+    exit $?
+  fi
+  exec "$bridge_bin" "$@"
+}
 
 if [ -x "$plugin_root/lib/t3-mini-bridge" ]; then
-  exec "$plugin_root/lib/t3-mini-bridge" "$@"
+  run_bridge "$plugin_root/lib/t3-mini-bridge" "$@"
 fi
 
 if command -v node >/dev/null 2>&1 && [ -f "$plugin_root/lib/t3-mini-bridge.mjs" ]; then
-  exec node "$plugin_root/lib/t3-mini-bridge.mjs" "$@"
+  run_bridge node "$plugin_root/lib/t3-mini-bridge.mjs" "$@"
 fi
 
 if [ "$(uname -m)" != x86_64 ]; then
@@ -28,7 +39,7 @@ fi
 
 expected_checksum=$(sed -n '1{s/[[:space:]].*$//;p;}' "$runtime_checksum")
 if [ -x "$runtime" ] && printf '%s  %s\n' "$expected_checksum" "$runtime" | sha256sum -c - >/dev/null 2>&1; then
-  exec "$runtime" "$@"
+  run_bridge "$runtime" "$@"
 fi
 
 mkdir -p -m 700 "$runtime_dir"
@@ -45,7 +56,7 @@ fi
 chmod 0755 "$runtime_stage"
 mv -f -- "$runtime_stage" "$runtime"
 trap - EXIT HUP INT TERM
-exec "$runtime" "$@"
+run_bridge "$runtime" "$@"
 
 echo "T3 Command Center bridge is missing. Reinstall the Omarchy T3 Command Center plugin." >&2
 exit 127
