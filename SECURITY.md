@@ -127,6 +127,6 @@ reproduction steps.
 
 To completely remove the local trust material, run `uninstall` from the
 installed marketplace checkout, the packaged `./uninstall`, or
-`pnpm uninstall:plugin` from a source checkout. `--keep-secrets` is available
+`pnpm remove:plugin` from a source checkout. `--keep-secrets` is available
 only when deliberately preserving the native session and DPoP identity for a
 later reinstall.

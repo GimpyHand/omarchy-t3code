@@ -359,9 +359,9 @@ test("the mini client opens in the bar-owned Omarchy modal", async () => {
 test("packaging uses an ephemeral callback handler that forwards URI arguments", async () => {
   const launcher = await readFile(join(root, "bin", "t3-mini-bridge"), "utf8");
   const callback = await readFile(join(root, "bridge", "src", "auth", "protocolHandler.ts"), "utf8");
-  const installer = await readFile(join(root, "scripts", "install-package"), "utf8");
-  const sourceInstaller = await readFile(join(root, "scripts", "install-plugin.mjs"), "utf8");
-  const uninstaller = await readFile(join(root, "scripts", "uninstall-package"), "utf8");
+  const installer = await readFile(join(root, "scripts", "deploy-package"), "utf8");
+  const sourceInstaller = await readFile(join(root, "scripts", "deploy-dev-plugin.mjs"), "utf8");
+  const uninstaller = await readFile(join(root, "scripts", "remove-package"), "utf8");
   assert.match(launcher, /exec "\$plugin_root\/lib\/t3-mini-bridge" "\$@"/u);
   assert.match(callback, /NoDisplay=true/u);
   assert.match(callback, /--oauth-callback %u/u);

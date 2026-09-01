@@ -11,7 +11,7 @@ contributors alike.
 git clone https://github.com/GimpyHand/omarchy-t3code.git
 cd omarchy-t3code
 git submodule update --init upstream/t3code
-pnpm install --frozen-lockfile
+pnpm i --frozen-lockfile
 pnpm check
 ```
 
@@ -27,7 +27,7 @@ tests, issues, or fixtures.
 
 `pnpm package` builds and self-tests the standalone bridge, then writes
 `dist/plugin` and `dist/omarchy-t3code-plugin.tar.gz`. To install that result
-from a source checkout on Omarchy, run `pnpm install:plugin`. The installer
+from a source checkout on Omarchy, run `pnpm deploy:plugin`. The deploy script
 atomically replaces the plugin, rescans the shell, enables the widget on first
 install, preserves its position on updates, and retains at most one rollback
 copy under the registry-ignored `.backups/` directory.

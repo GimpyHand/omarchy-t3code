@@ -87,8 +87,8 @@ await access(join(root, "THIRD_PARTY_NOTICES.md"));
 await access(join(root, "licenses", "NODEJS-LICENSE"));
 await access(join(root, "licenses", "T3-CODE-LICENSE"));
 await access(join(root, "licenses", "BUNDLED-LICENSES.json"));
-await access(join(root, "scripts", "install-package"));
-await access(join(root, "scripts", "uninstall-package"));
+await access(join(root, "scripts", "deploy-package"));
+await access(join(root, "scripts", "remove-package"));
 await access(join(root, "scripts", "verify-marketplace-runtime.mjs"));
 await access(join(root, "lib", "t3-mini-bridge-linux-x64.gz"));
 await access(join(root, "lib", "t3-mini-bridge-linux-x64.sha256"));
@@ -138,7 +138,11 @@ if (await readFile(join(root, "LICENSE"), "utf8") !== await readFile(join(root, 
 if (await readFile(join(root, "upstream", "t3code", "LICENSE"), "utf8") !== await readFile(join(root, "licenses", "T3-CODE-LICENSE"), "utf8")) {
   fail("the marketplace runtime does not contain the pinned T3 license.");
 }
-for (const executable of [join(root, "bin", "t3-mini-bridge"), join(root, "uninstall")]) {
+for (const executable of [
+  join(root, "bin", "t3-mini-bridge"),
+  join(root, "scripts", "deploy-package"),
+  join(root, "scripts", "remove-package"),
+]) {
   if (((await stat(executable)).mode & 0o111) === 0) fail(`${executable} must be executable.`);
 }
 

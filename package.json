@@ -33,8 +33,8 @@
     "package": "node scripts/package.mjs",
     "bundle:marketplace": "node scripts/bundle-marketplace-runtime.mjs && node scripts/verify-marketplace-runtime.mjs",
     "verify:marketplace-runtime": "node scripts/verify-marketplace-runtime.mjs",
-    "install:plugin": "node scripts/install-plugin.mjs",
-    "uninstall:plugin": "scripts/uninstall-package",
+    "deploy:plugin": "node scripts/deploy-dev-plugin.mjs",
+    "remove:plugin": "scripts/remove-package",
     "check:t3-nightly": "node scripts/check-t3-nightly.mjs",
     "update:t3-nightly": "node scripts/update-t3-nightly.mjs"
   },

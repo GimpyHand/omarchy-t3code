@@ -14,7 +14,7 @@ pnpm package
 pnpm verify:marketplace-runtime
 dist/plugin/lib/t3-mini-bridge --self-test
 scripts/check-t3-nightly
-pnpm install:plugin
+pnpm deploy:plugin
 ```
 
 Expected self-test output contains the current plugin version, protocol version

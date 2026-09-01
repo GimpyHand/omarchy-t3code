@@ -182,13 +182,13 @@ await copyFile(join(root, "preview.png"), join(packagedPlugin, "preview.png"));
 await copyFile(join(root, "t3-upstream.lock.json"), join(packagedPlugin, "t3-upstream.lock.json"));
 await chmod(join(packagedPlugin, "bin", "t3-mini-bridge"), 0o755);
 await chmod(join(packagedPlugin, "lib", "t3-mini-bridge"), 0o755);
-await copyFile(join(root, "scripts", "install-package"), join(outputRoot, "install"));
+await copyFile(join(root, "scripts", "deploy-package"), join(outputRoot, "install"));
 await chmod(join(outputRoot, "install"), 0o755);
-await copyFile(join(root, "scripts", "uninstall-package"), join(outputRoot, "uninstall"));
+await copyFile(join(root, "scripts", "remove-package"), join(outputRoot, "uninstall"));
 await chmod(join(outputRoot, "uninstall"), 0o755);
 // Also ship uninstall inside the plugin tree so README's installed path
 // (~/.config/omarchy/plugins/<id>/uninstall) works after archive install.
-await copyFile(join(root, "scripts", "uninstall-package"), join(packagedPlugin, "uninstall"));
+await copyFile(join(root, "scripts", "remove-package"), join(packagedPlugin, "uninstall"));
 await chmod(join(packagedPlugin, "uninstall"), 0o755);
 
 const omarchy = spawnSync("omarchy", ["plugin", "validate", packagedPlugin], { cwd: root, encoding: "utf8", stdio: "inherit" });

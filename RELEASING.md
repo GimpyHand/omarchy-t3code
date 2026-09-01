@@ -7,7 +7,7 @@
    `bridge/package.json`, and root `manifest.json`; `pnpm validate:repo`
    enforces consistency.
 3. Use the official Linux x64 Node version pinned in `.node-version` and pnpm
-   from `packageManager`. Run `pnpm install --frozen-lockfile`, `pnpm package`,
+   from `packageManager`. Run `pnpm i --frozen-lockfile`, `pnpm package`,
    then `pnpm bundle:marketplace` to refresh and byte-verify the root compressed
    runtime. Copy the newly generated `dist/plugin/licenses` inventory to root
    `licenses`, inspect both changes, and rerun `pnpm check`, `pnpm package`, and

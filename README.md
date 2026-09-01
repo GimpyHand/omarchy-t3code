@@ -83,7 +83,7 @@ Add `--keep-secrets` to retain the Clerk session and DPoP identity.
 
 ```bash
 pnpm check          # validate + typecheck + tests + QML + build
-pnpm install:plugin # package into ~/.config/omarchy/plugins/
+pnpm deploy:plugin  # build and copy into ~/.config/omarchy/plugins/
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md),
