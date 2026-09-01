@@ -1,5 +1,9 @@
 # T3 Code Nightly compatibility
 
+**Maintainer note:** The pin below is for building and testing this repository
+only. End users do not install a specific T3 Code version — the shipped plugin
+talks to whatever environments are linked to their T3 account over Relay.
+
 ## Supported revision
 
 The supported upstream is the exact Nightly that passed compatibility review

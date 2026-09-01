@@ -179,7 +179,6 @@ for (const name of ["README.md", "ARCHITECTURE.md", "SECURITY.md", "UPSTREAM.md"
 }
 await copyFile(join(root, "docs", "ACCEPTANCE.md"), join(packagedPlugin, "docs", "ACCEPTANCE.md"));
 await copyFile(join(root, "preview.png"), join(packagedPlugin, "preview.png"));
-await copyFile(join(root, "t3-upstream.lock.json"), join(packagedPlugin, "t3-upstream.lock.json"));
 await chmod(join(packagedPlugin, "bin", "t3-mini-bridge"), 0o755);
 await chmod(join(packagedPlugin, "lib", "t3-mini-bridge"), 0o755);
 await copyFile(join(root, "scripts", "deploy-package"), join(outputRoot, "install"));

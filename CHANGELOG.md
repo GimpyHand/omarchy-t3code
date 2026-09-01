@@ -19,8 +19,8 @@ Omarchy/Quickshell mini client for T3 Code. Plugin id: `bralyx.t3code`.
   bar modal.
 - Bar status color dot (offline / ready / working / attention) beside the T3
   mark.
-- Exact T3 Nightly compatibility pin, standalone Linux packaging, license
-  inventory, checksummed marketplace runtime, installer, and uninstaller
+- Exact T3 protocol integration, standalone Linux packaging, license
+  inventory, checksummed marketplace runtime, deploy scripts, and uninstaller
   (including `uninstall` inside the packaged plugin tree).
 
 ### Security
@@ -36,8 +36,9 @@ Omarchy/Quickshell mini client for T3 Code. Plugin id: `bralyx.t3code`.
 
 ### Compatibility
 
-- T3 Code Nightly `v0.0.34-nightly.20260822.1160`
-  (`2c4158f87a1b6a586d0aa5e0338f122cb7887c4f`).
+- Works with linked T3 environments over Relay; no specific local T3 desktop
+  app version is required. Feature gates follow each environment's advertised
+  capabilities.
 - Omarchy 4.0+ (x86-64) with Quickshell plugins and Secret Service.
 
 [1.0.0]: https://github.com/GimpyHand/omarchy-t3code/releases/tag/v1.0.0

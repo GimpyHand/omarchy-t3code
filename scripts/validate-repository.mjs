@@ -64,7 +64,7 @@ if (submoduleCommit !== lock.commit) {
   fail(`the T3 submodule is ${submoduleCommit}, but the lock requires ${lock.commit}.`);
 }
 
-const documentation = ["README.md", "UPSTREAM.md", "docs/ACCEPTANCE.md"];
+const documentation = ["UPSTREAM.md", "docs/ACCEPTANCE.md"];
 for (const path of documentation) {
   const contents = await readFile(join(root, path), "utf8");
   if (!contents.includes(lock.commit)) fail(`${path} does not identify the supported T3 commit.`);

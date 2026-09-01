@@ -27,9 +27,11 @@ Bar widget (T3 mark + status color):
 - One typed TypeScript bridge as a shell child; QML is presentation only —
   no embedded browser, terminal, editor, or Git UI
 
-Pinned T3 Nightly: `v0.0.34-nightly.20260822.1160`
-(`2c4158f87a1b6a586d0aa5e0338f122cb7887c4f`). Exact source lives in
-`upstream/t3code` and `t3-upstream.lock.json`.
+Works with **your linked T3 environments** over Relay. You do not need a
+specific T3 Code desktop version installed on this machine — sign in with the
+same T3 account you use elsewhere and the client talks to whatever environments
+you have already connected. Optional operations follow each environment's
+advertised capabilities.
 
 ## Install
 
@@ -57,6 +59,7 @@ you to Inbox.
 
 ## Requirements
 
+- A T3 account with at least one linked environment reachable through Relay
 - Omarchy 4.0+ (x86-64) with Quickshell plugins and `wl-paste`
 - Secret Service + `secret-tool`
 - `xdg-open`, `xdg-mime`, `gzip`, `sha256sum`, graphical browser

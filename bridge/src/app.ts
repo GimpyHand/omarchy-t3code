@@ -12,9 +12,6 @@ import { DpopKeyManager } from "./t3/dpop.ts";
 import { T3RelayClient } from "./t3/relay.ts";
 import { T3EnvironmentSession } from "./t3/session.ts";
 import packageMetadata from "../../package.json" with { type: "json" };
-import upstreamLock from "../../t3-upstream.lock.json" with { type: "json" };
-
-const UPSTREAM = upstreamLock;
 
 export class BridgeApp implements NdjsonHandler {
   readonly channel: NdjsonChannel;
@@ -91,7 +88,7 @@ export class BridgeApp implements NdjsonHandler {
   async start(): Promise<void> {
     this.channel.start();
     const auth = await this.auth.initialize();
-    this.emit("bridge.ready", { protocolVersion: PROTOCOL_VERSION, bridgeVersion: packageMetadata.version, upstream: UPSTREAM });
+    this.emit("bridge.ready", { protocolVersion: PROTOCOL_VERSION, bridgeVersion: packageMetadata.version });
     this.emit("connection.changed", this.connection.status());
     if (auth.phase === "signedIn") {
       void this.connection.discoverAndConnectPreferred().catch((error) => this.emitUnexpectedConnectionError(error));
@@ -118,7 +115,7 @@ export class BridgeApp implements NdjsonHandler {
       let payload: unknown;
       switch (request.type) {
         case "bridge.ping":
-          payload = { ready: true, protocolVersion: PROTOCOL_VERSION, upstream: UPSTREAM };
+          payload = { ready: true, protocolVersion: PROTOCOL_VERSION };
           break;
         case "bridge.shutdown":
           payload = { shuttingDown: true };

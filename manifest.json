@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Bralyx Digital",
   "license": "MIT",
-  "description": "A compact native T3 Command Center client for Omarchy — Inbox and threads without the full desktop app.",
+  "description": "A compact native T3 Command Center client for Omarchy — works with your linked T3 environments via Relay, no specific desktop app version required.",
   "kinds": [
     "service",
     "bar-widget"
