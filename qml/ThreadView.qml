@@ -13,6 +13,57 @@ Item {
   readonly property var threadData: service.thread
   readonly property bool hasPendingInput: threadData !== null && (threadData.inputs || []).length > 0
   property var changedFilesToReveal: null
+  property bool loadingHistory: false
+  property bool jumpingToLatest: false
+  property string historyAnchorId: ""
+  property real historyAnchorOffset: 0
+  readonly property var history: threadData && threadData.history ? threadData.history : ({ hasMore: false, browsing: false, loading: false, error: null })
+
+  function loadEarlier() {
+    if (loadingHistory || history.loading || !conversation.contentItem) return
+    historyAnchorId = ""
+    for (var i = 0; i < messages.count; i++) {
+      var row = messages.itemAt(i)
+      if (!row) continue
+      var position = row.mapToItem(conversation.contentItem.contentItem, 0, 0).y
+      if (position + row.height >= conversation.contentItem.contentY) {
+        historyAnchorId = String(row.modelData.id)
+        historyAnchorOffset = position - conversation.contentItem.contentY
+        break
+      }
+    }
+    loadingHistory = true
+    service.loadEarlier(String(threadData.id), String(threadData.environmentId), function() {
+      root.loadingHistory = false
+      Qt.callLater(root.restoreHistoryAnchor)
+    })
+  }
+
+  function restoreHistoryAnchor() {
+    if (!conversation.contentItem) return
+    historyControls.forceLayout()
+    conversationContent.forceLayout()
+    for (var i = 0; i < messages.count; i++) {
+      var row = messages.itemAt(i)
+      if (!row || String(row.modelData.id) !== historyAnchorId) continue
+      var position = row.mapToItem(conversation.contentItem.contentItem, 0, 0).y
+      var maximum = Math.max(0, conversation.contentItem.contentHeight - conversation.height)
+      conversation.contentItem.contentY = Math.max(0, Math.min(position - historyAnchorOffset, maximum))
+      return
+    }
+    conversation.contentItem.contentY = 0
+  }
+
+  function jumpToLatest() {
+    if (jumpingToLatest || loadingHistory || history.loading) return
+    jumpingToLatest = true
+    service.showLatest(String(threadData.id), String(threadData.environmentId), function(ok) {
+      root.jumpingToLatest = false
+      if (ok) Qt.callLater(function() {
+        if (conversation.contentItem) conversation.contentItem.contentY = Math.max(0, conversation.contentItem.contentHeight - conversation.height)
+      })
+    })
+  }
 
   function diffForMessage(messageId) {
     var diffs = threadData ? (threadData.diffs || []) : []
@@ -43,6 +94,7 @@ Item {
     target: root.service
     function onThreadChanged() {
       if (!conversation.contentItem) return
+      if (root.loadingHistory || root.history.browsing) return
       var nearBottom = conversation.contentItem.contentY + conversation.height >= conversation.contentItem.contentHeight - Style.space(100)
       if (nearBottom) Qt.callLater(function() { conversation.contentItem.contentY = Math.max(0, conversation.contentItem.contentHeight - conversation.height) })
     }
@@ -136,6 +188,7 @@ Item {
 
     ScrollView {
       id: conversation
+      objectName: "conversation"
       width: parent.width
       height: root.threadData
         ? parent.height - y - (composer.visible ? composer.height + parent.spacing : 0)
@@ -144,8 +197,40 @@ Item {
       ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
       Column {
+        id: conversationContent
         width: conversation.availableWidth
         spacing: Style.spacing.lg
+
+        Column {
+          id: historyControls
+          width: parent.width
+          visible: root.threadData !== null && (root.history.hasMore || root.history.browsing || root.history.error !== null)
+          spacing: Style.spacing.sm
+          Row {
+            spacing: Style.spacing.sm
+            Button {
+              visible: root.history.hasMore
+              text: root.history.loading || root.loadingHistory ? "Loading…" : (root.history.error ? "Retry older messages" : "Load older messages")
+              enabled: !root.history.loading && !root.loadingHistory && !root.jumpingToLatest
+              onClicked: root.loadEarlier()
+            }
+            Button {
+              visible: root.history.browsing
+              text: "Jump to latest"
+              enabled: !root.history.loading && !root.loadingHistory && !root.jumpingToLatest
+              onClicked: root.jumpToLatest()
+            }
+          }
+          Text {
+            width: parent.width
+            visible: root.history.browsing || root.history.error !== null
+            text: root.history.error || "Browsing older messages. Jump to latest for live replies."
+            color: root.history.error ? Color.urgent : Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+          }
+        }
 
         Text {
           visible: root.threadData === null
@@ -159,6 +244,7 @@ Item {
         }
 
         Repeater {
+          id: messages
           model: root.threadData ? root.threadData.messages : []
           Column {
             required property var modelData
@@ -174,6 +260,13 @@ Item {
               onRevealRequested: root.revealChangedFiles(changedFiles)
             }
           }
+        }
+
+        QueueCard {
+          visible: root.threadData !== null && root.threadData.queue && (root.threadData.queue.total > 0 || root.threadData.queue.held)
+          width: conversation.availableWidth
+          service: root.service
+          threadData: root.threadData || ({})
         }
 
         WorkingIndicator {

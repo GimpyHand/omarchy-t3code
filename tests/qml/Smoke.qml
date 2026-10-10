@@ -16,6 +16,7 @@ ShellRoot {
     "MessageBubble.qml",
     "ModelOptionsPicker.qml",
     "Panel.qml",
+    "QueueCard.qml",
     "Service.qml",
     "T3Mark.qml",
     "ThreadMetaRow.qml",

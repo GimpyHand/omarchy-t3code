@@ -102,7 +102,12 @@ export class ConnectionCoordinator {
   private publishAggregateStatus(): void {
     const entries = [...this.entries.values()];
     if (entries.length === 0) {
-      this.publish({ phase: "disconnected", environmentId: this.preferred, detail: null, attempt: 0 });
+      this.publish({
+        phase: "disconnected",
+        environmentId: this.preferred,
+        detail: null,
+        attempt: 0,
+      });
       return;
     }
     if (entries.some((entry) => entry.phase === "connected")) {
@@ -111,7 +116,12 @@ export class ConnectionCoordinator {
       return;
     }
     if (entries.some((entry) => entry.phase === "connecting" || entry.phase === "discovering")) {
-      this.publish({ phase: "connecting", environmentId: this.preferred, detail: null, attempt: 0 });
+      this.publish({
+        phase: "connecting",
+        environmentId: this.preferred,
+        detail: null,
+        attempt: 0,
+      });
       return;
     }
     if (entries.some((entry) => entry.phase === "reconnecting")) {
@@ -197,7 +207,10 @@ export class ConnectionCoordinator {
       this.publishMergedInbox();
       return this.environments;
     } catch (error) {
-      const bridgeError = error instanceof BridgeError ? error : new BridgeError("ENVIRONMENT_DISCOVERY_FAILED", redactText(error), true);
+      const bridgeError =
+        error instanceof BridgeError
+          ? error
+          : new BridgeError("ENVIRONMENT_DISCOVERY_FAILED", redactText(error), true);
       this.publish({
         phase: hadConnected ? "connected" : "error",
         environmentId: this.preferred,
@@ -211,15 +224,18 @@ export class ConnectionCoordinator {
   async discoverAndConnectAll(): Promise<void> {
     const environments = await this.discover();
     const remembered = await readSelectedEnvironment();
-    this.preferred = environments.find((entry) => entry.id === remembered)?.id ?? environments[0]?.id ?? null;
+    this.preferred =
+      environments.find((entry) => entry.id === remembered)?.id ?? environments[0]?.id ?? null;
     this.publishEnvironments();
-    await Promise.all(environments.map(async (entry) => {
-      try {
-        await this.connectEnvironment(entry.id);
-      } catch {
-        // Per-environment phase already published; keep connecting the rest.
-      }
-    }));
+    await Promise.all(
+      environments.map(async (entry) => {
+        try {
+          await this.connectEnvironment(entry.id);
+        } catch {
+          // Per-environment phase already published; keep connecting the rest.
+        }
+      }),
+    );
   }
 
   /** @deprecated Prefer discoverAndConnectAll; kept as alias for call sites. */
@@ -229,7 +245,10 @@ export class ConnectionCoordinator {
 
   async select(environmentId: string): Promise<void> {
     if (!this.environments.some((entry) => entry.id === environmentId)) {
-      throw new BridgeError("ENVIRONMENT_NOT_FOUND", "Refresh environments and choose one of the linked T3 environments.");
+      throw new BridgeError(
+        "ENVIRONMENT_NOT_FOUND",
+        "Refresh environments and choose one of the linked T3 environments.",
+      );
     }
     this.preferred = environmentId;
     await writeSelectedEnvironment(environmentId);
@@ -250,7 +269,11 @@ export class ConnectionCoordinator {
     await this.connectAttempt(environmentId, generation, 0);
   }
 
-  private async connectAttempt(environmentId: string, generation: number, attempt: number): Promise<void> {
+  private async connectAttempt(
+    environmentId: string,
+    generation: number,
+    attempt: number,
+  ): Promise<void> {
     const entry = this.entries.get(environmentId);
     if (!entry || generation !== entry.generation) return;
     entry.phase = attempt === 0 ? "connecting" : "reconnecting";
@@ -270,8 +293,12 @@ export class ConnectionCoordinator {
       this.publishAggregateStatus();
     } catch (error) {
       if (generation !== entry.generation) return;
-      const bridgeError = error instanceof BridgeError ? error : new BridgeError("ENVIRONMENT_CONNECT_FAILED", redactText(error), true);
-      const blocked = bridgeError.code === "UPSTREAM_OAUTH_DPOP_UNSUPPORTED" || !bridgeError.retryable;
+      const bridgeError =
+        error instanceof BridgeError
+          ? error
+          : new BridgeError("ENVIRONMENT_CONNECT_FAILED", redactText(error), true);
+      const blocked =
+        bridgeError.code === "UPSTREAM_OAUTH_DPOP_UNSUPPORTED" || !bridgeError.retryable;
       entry.phase = blocked ? "blocked" : "error";
       entry.detail = bridgeError.message;
       entry.attempt = attempt;
@@ -336,10 +363,16 @@ export class ConnectionCoordinator {
       entry.detail = null;
       entry.attempt = 0;
     }
+    await this.relay.close();
     this.entries.clear();
     this.inboxes.clear();
     this.openEnvironmentId = null;
-    this.publish({ phase: "disconnected", environmentId: this.preferred, detail: null, attempt: 0 });
+    this.publish({
+      phase: "disconnected",
+      environmentId: this.preferred,
+      detail: null,
+      attempt: 0,
+    });
     this.publishMergedInbox();
   }
 }

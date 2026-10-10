@@ -28,8 +28,8 @@ Item {
 
   BorderSurface {
     id: bubble
-    width: root.messageData.role === "user" ? Math.min(parent.width * 0.88, body.implicitWidth + Style.spacing.rowPaddingX * 2) : parent.width
-    height: body.implicitHeight + Style.spacing.rowPaddingX * 2
+    width: root.messageData.role === "user" ? Math.min(parent.width * 0.88, Math.max(body.implicitWidth, deliveryLabel.visible ? deliveryLabel.implicitWidth : 0) + Style.spacing.rowPaddingX * 2) : parent.width
+    height: body.implicitHeight + deliveryLabel.height + Style.spacing.rowPaddingX * 2
     anchors.right: root.messageData.role === "user" ? parent.right : undefined
     anchors.left: root.messageData.role === "user" ? undefined : parent.left
     radius: Style.cornerRadius
@@ -37,10 +37,25 @@ Item {
     borderSpec: root.messageData.role === "user" ? Border.controlSpec("normal", Color.foreground, Color.accent) : Border.none()
 
     Text {
-      id: body
+      id: deliveryLabel
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
+      anchors.margins: Style.spacing.rowPaddingX
+      visible: root.messageData.delivery === "queued" || root.messageData.delivery === "steer"
+      height: visible ? implicitHeight + Style.spacing.xs : 0
+      text: root.messageData.delivery === "queued" ? "Queued" : "Steering"
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+    }
+
+    Text {
+      id: body
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: deliveryLabel.bottom
+      anchors.topMargin: 0
       anchors.margins: Style.spacing.rowPaddingX
       text: root.displayedText() + (root.messageData.streaming ? "  ▍" : "")
       textFormat: root.messageData.role === "assistant" ? Text.MarkdownText : Text.PlainText

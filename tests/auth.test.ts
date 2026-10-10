@@ -3,9 +3,11 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { forwardNativeCallback } from "../bridge/src/auth/nativeCallback.ts";
-import { NativeClerkProvider } from "../bridge/src/auth/nativeProvider.ts";
+import { DEFAULT_NATIVE_CLERK_CONFIG, NativeClerkProvider } from "../bridge/src/auth/nativeProvider.ts";
 import {
   activateT3ProtocolHandler,
   clearT3ProtocolDefault,
@@ -29,7 +31,9 @@ test("native Clerk browser flow returns a relay-audienced session credential", a
       email_addresses: [{ id: "email-browser", email_address: "browser@example.test" }],
     },
   };
-  const relayClaims = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1_000) + 300 })).toString("base64url");
+  const relayClaims = Buffer.from(
+    JSON.stringify({ exp: Math.floor(Date.now() / 1_000) + 300 }),
+  ).toString("base64url");
   const relayJwt = `eyJhbGciOiJub25lIn0.${relayClaims}.signaturevalue`;
   const requests: Array<{ method: string; url: URL; headers: Headers; body: string }> = [];
   let signedIn = false;
@@ -40,41 +44,59 @@ test("native Clerk browser flow returns a relay-audienced session credential", a
     const headers = new Headers(init?.headers);
     const body = String(init?.body ?? "");
     requests.push({ method, url, headers, body });
-    const responseHeaders = { "content-type": "application/json", authorization: "Bearer clerk-native-client-token" };
+    const responseHeaders = {
+      "content-type": "application/json",
+      authorization: "Bearer clerk-native-client-token",
+    };
     if (method === "GET" && url.pathname === "/v1/client") {
-      return Response.json({
-        response: {
-          object: "client",
-          sessions: signedIn ? [activeSession] : [],
-          last_active_session_id: signedIn ? activeSession.id : null,
+      return Response.json(
+        {
+          response: {
+            object: "client",
+            sessions: signedIn ? [activeSession] : [],
+            last_active_session_id: signedIn ? activeSession.id : null,
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
     if (method === "POST" && url.pathname === "/v1/client/sign_ins") {
-      return Response.json({
-        response: {
-          id: "sign-in-browser",
-          first_factor_verification: {
-            external_verification_redirect_url: "https://accounts.example.test/t3-connect",
+      return Response.json(
+        {
+          response: {
+            id: "sign-in-browser",
+            first_factor_verification: {
+              external_verification_redirect_url: "https://accounts.example.test/t3-connect",
+            },
           },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
     if (method === "GET" && url.pathname === "/v1/client/sign_ins/sign-in-browser") {
       signedIn = true;
-      return Response.json({
-        response: { id: "sign-in-browser", status: "complete" },
-        client: {
-          sessions: [activeSession],
-          last_active_session_id: activeSession.id,
+      return Response.json(
+        {
+          response: { id: "sign-in-browser", status: "complete" },
+          client: {
+            sessions: [activeSession],
+            last_active_session_id: activeSession.id,
+          },
         },
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
-    if (method === "POST" && url.pathname === "/v1/client/sessions/session-browser/tokens/t3-relay") {
+    if (
+      method === "POST" &&
+      url.pathname === "/v1/client/sessions/session-browser/tokens/t3-relay"
+    ) {
       relayTokenRequests += 1;
-      return Response.json({ response: { jwt: relayJwt }, client: null }, { headers: responseHeaders });
+      return Response.json(
+        { response: { jwt: relayJwt }, client: null },
+        { headers: responseHeaders },
+      );
     }
     return Response.json({}, { status: 404 });
   };
@@ -87,12 +109,16 @@ test("native Clerk browser flow returns a relay-audienced session credential", a
     callbackTimeoutMs: 2_000,
     activateProtocolHandler: async () => {
       handlerActivations += 1;
-      return async () => { handlerRestorations += 1; };
+      return async () => {
+        handlerRestorations += 1;
+      };
     },
     openBrowser: async (landingUrl) => {
       const landing = new URL(landingUrl);
       assert.equal(landing.hostname, "127.0.0.1");
-      const started = await fetch(new URL("/start?provider=google", landing), { redirect: "manual" });
+      const started = await fetch(new URL("/start?provider=google", landing), {
+        redirect: "manual",
+      });
       assert.equal(started.status, 302);
       assert.equal(started.headers.get("location"), "https://accounts.example.test/t3-connect");
       const unauthorized = await fetch(new URL("/oauth-callback", landing), {
@@ -114,7 +140,9 @@ test("native Clerk browser flow returns a relay-audienced session credential", a
   assert(await store.get("t3-connect-clerk-client"));
   assert.equal(await store.get("t3-connect-native-callback"), null);
 
-  const signIn = requests.find((entry) => entry.method === "POST" && entry.url.pathname === "/v1/client/sign_ins");
+  const signIn = requests.find(
+    (entry) => entry.method === "POST" && entry.url.pathname === "/v1/client/sign_ins",
+  );
   assert(signIn);
   assert.equal(signIn.headers.get("authorization"), "Bearer clerk-native-client-token");
   assert.deepEqual(Object.fromEntries(new URLSearchParams(signIn.body)), {
@@ -122,14 +150,16 @@ test("native Clerk browser flow returns a relay-audienced session credential", a
     redirect_url: "t3code://app/",
     action_complete_redirect_url: "t3code://app/",
   });
-  const callback = requests.find((entry) => entry.url.pathname === "/v1/client/sign_ins/sign-in-browser");
+  const callback = requests.find(
+    (entry) => entry.url.pathname === "/v1/client/sign_ins/sign-in-browser",
+  );
   assert(callback);
   assert.equal(callback.url.searchParams.get("rotating_token_nonce"), "test-nonce");
   for (const entry of requests) {
     assert.equal(entry.url.searchParams.get("__clerk_api_version"), "2026-05-12");
-    assert.equal(entry.url.searchParams.get("_clerk_js_version"), "6.29.2");
+    assert.equal(entry.url.searchParams.get("_clerk_js_version"), DEFAULT_NATIVE_CLERK_CONFIG.clerkJsVersion);
     assert.equal(entry.url.searchParams.get("_is_native"), "1");
-    assert.equal(entry.url.searchParams.get("_electron_sdk_version"), "0.0.34");
+    assert.equal(entry.url.searchParams.get("_electron_sdk_version"), DEFAULT_NATIVE_CLERK_CONFIG.electronSdkVersion);
   }
 
   const firstCredential = await provider.relayCredential();
@@ -164,48 +194,63 @@ test("native Clerk password sign-in completes without a desktop callback", async
   const clerkFetch: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     const method = String(init?.method ?? "GET");
-    const responseHeaders = { "content-type": "application/json", authorization: "Bearer clerk-native-client-token" };
+    const responseHeaders = {
+      "content-type": "application/json",
+      authorization: "Bearer clerk-native-client-token",
+    };
     if (method === "GET" && url.pathname === "/v1/client") {
-      return Response.json({
-        response: {
-          object: "client",
-          sessions: signedIn ? [activeSession] : [],
-          last_active_session_id: signedIn ? activeSession.id : null,
+      return Response.json(
+        {
+          response: {
+            object: "client",
+            sessions: signedIn ? [activeSession] : [],
+            last_active_session_id: signedIn ? activeSession.id : null,
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
     if (method === "POST" && url.pathname === "/v1/client/sign_ins") {
       const body = new URLSearchParams(String(init?.body ?? ""));
       assert.equal(body.get("identifier"), "inline@example.test");
       assert.equal(body.get("password"), null);
       signInId = "sign-in-password";
-      return Response.json({
-        response: {
-          object: "sign_in_attempt",
-          id: signInId,
-          status: "needs_first_factor",
+      return Response.json(
+        {
+          response: {
+            object: "sign_in_attempt",
+            id: signInId,
+            status: "needs_first_factor",
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
-    if (method === "POST" && url.pathname === `/v1/client/sign_ins/${signInId}/attempt_first_factor`) {
+    if (
+      method === "POST" &&
+      url.pathname === `/v1/client/sign_ins/${signInId}/attempt_first_factor`
+    ) {
       const body = new URLSearchParams(String(init?.body ?? ""));
       assert.equal(body.get("strategy"), "password");
       assert.equal(body.get("password"), "secret-password");
       signedIn = true;
-      return Response.json({
-        response: {
-          object: "sign_in_attempt",
-          id: signInId,
-          status: "complete",
+      return Response.json(
+        {
+          response: {
+            object: "sign_in_attempt",
+            id: signInId,
+            status: "complete",
+          },
+          client: {
+            object: "client",
+            sessions: [activeSession],
+            last_active_session_id: activeSession.id,
+          },
         },
-        client: {
-          object: "client",
-          sessions: [activeSession],
-          last_active_session_id: activeSession.id,
-        },
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
     return Response.json({}, { status: 404 });
   };
@@ -249,65 +294,94 @@ test("native Clerk email second-factor sign-in completes after password verifica
   const clerkFetch: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     const method = String(init?.method ?? "GET");
-    const responseHeaders = { "content-type": "application/json", authorization: "Bearer clerk-native-client-token" };
+    const responseHeaders = {
+      "content-type": "application/json",
+      authorization: "Bearer clerk-native-client-token",
+    };
     if (method === "GET" && url.pathname === "/v1/client") {
-      return Response.json({
-        response: {
-          object: "client",
-          sessions: signedIn ? [activeSession] : [],
-          last_active_session_id: signedIn ? activeSession.id : null,
+      return Response.json(
+        {
+          response: {
+            object: "client",
+            sessions: signedIn ? [activeSession] : [],
+            last_active_session_id: signedIn ? activeSession.id : null,
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
     if (method === "POST" && url.pathname === "/v1/client/sign_ins") {
       signInId = "sign-in-2fa";
-      return Response.json({
-        response: {
-          object: "sign_in_attempt",
-          id: signInId,
-          status: "needs_first_factor",
+      return Response.json(
+        {
+          response: {
+            object: "sign_in_attempt",
+            id: signInId,
+            status: "needs_first_factor",
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
-    if (method === "POST" && url.pathname === `/v1/client/sign_ins/${signInId}/attempt_first_factor`) {
-      return Response.json({
-        response: {
-          object: "sign_in_attempt",
-          id: signInId,
-          status: "needs_second_factor",
-          supported_second_factors: [{
-            strategy: "email_code",
-            email_address_id: "email-2fa",
-          }],
+    if (
+      method === "POST" &&
+      url.pathname === `/v1/client/sign_ins/${signInId}/attempt_first_factor`
+    ) {
+      return Response.json(
+        {
+          response: {
+            object: "sign_in_attempt",
+            id: signInId,
+            status: "needs_second_factor",
+            supported_second_factors: [
+              {
+                strategy: "email_code",
+                email_address_id: "email-2fa",
+              },
+            ],
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
-    if (method === "POST" && url.pathname === `/v1/client/sign_ins/${signInId}/prepare_second_factor`) {
-      return Response.json({
-        response: {
-          object: "sign_in_attempt",
-          id: signInId,
-          status: "needs_second_factor",
+    if (
+      method === "POST" &&
+      url.pathname === `/v1/client/sign_ins/${signInId}/prepare_second_factor`
+    ) {
+      return Response.json(
+        {
+          response: {
+            object: "sign_in_attempt",
+            id: signInId,
+            status: "needs_second_factor",
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
-    if (method === "POST" && url.pathname === `/v1/client/sign_ins/${signInId}/attempt_second_factor`) {
+    if (
+      method === "POST" &&
+      url.pathname === `/v1/client/sign_ins/${signInId}/attempt_second_factor`
+    ) {
       const body = new URLSearchParams(String(init?.body ?? ""));
       assert.equal(body.get("strategy"), "email_code");
       assert.equal(body.get("code"), "123456");
       signedIn = true;
-      return Response.json({
-        response: {
-          object: "sign_in_attempt",
-          id: signInId,
-          status: "complete",
+      return Response.json(
+        {
+          response: {
+            object: "sign_in_attempt",
+            id: signInId,
+            status: "complete",
+          },
+          client: null,
         },
-        client: null,
-      }, { headers: responseHeaders });
+        { headers: responseHeaders },
+      );
     }
     return Response.json({}, { status: 404 });
   };
@@ -368,7 +442,9 @@ test("T3 callback handler temporarily preserves an existing desktop owner", asyn
   let desktopRemoved = false;
   const restore = await activateT3ProtocolHandler({
     command,
-    registerDesktop: async () => async () => { desktopRemoved = true; },
+    registerDesktop: async () => async () => {
+      desktopRemoved = true;
+    },
   });
   assert.equal(current, "bralyx.t3code-callback.desktop");
   await restore();
@@ -404,8 +480,13 @@ test("callback handler clears a newly created default before removing its deskto
   };
   const restore = await activateT3ProtocolHandler({
     command,
-    clearDefault: async () => { current = ""; cleared = true; },
-    registerDesktop: async () => async () => { removed = true; },
+    clearDefault: async () => {
+      current = "";
+      cleared = true;
+    },
+    registerDesktop: async () => async () => {
+      removed = true;
+    },
   });
   assert.equal(current, "bralyx.t3code-callback.desktop");
   await restore();
@@ -428,7 +509,10 @@ test("callback desktop registration is hidden, quoted, and removed after login",
     assert.match(contents, /^MimeType=x-scheme-handler\/t3code;$/mu);
     assert.match(contents, /^Exec="\/opt\/T3 Mini\/t3-mini-bridge" --oauth-callback %u$/mu);
     await removeDesktop();
-    await assert.rejects(access(desktop), (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT");
+    await assert.rejects(
+      access(desktop),
+      (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -440,16 +524,20 @@ test("clearing an ephemeral callback default preserves other MIME owners", async
   const mimeapps = join(config, "mimeapps.list");
   try {
     await mkdir(config, { recursive: true });
-    await writeFile(mimeapps, [
-      "[Default Applications]",
-      "x-scheme-handler/t3code=bralyx.t3code-callback.desktop;t3code-nightly.desktop;",
-      "text/plain=org.example.Editor.desktop;",
-      "",
-    ].join("\n"));
-    await clearT3ProtocolDefault(
-      "bralyx.t3code-callback.desktop",
-      { HOME: root, XDG_CONFIG_HOME: config, XDG_DATA_HOME: join(root, "data") },
+    await writeFile(
+      mimeapps,
+      [
+        "[Default Applications]",
+        "x-scheme-handler/t3code=bralyx.t3code-callback.desktop;t3code-nightly.desktop;",
+        "text/plain=org.example.Editor.desktop;",
+        "",
+      ].join("\n"),
     );
+    await clearT3ProtocolDefault("bralyx.t3code-callback.desktop", {
+      HOME: root,
+      XDG_CONFIG_HOME: config,
+      XDG_DATA_HOME: join(root, "data"),
+    });
     const contents = await readFile(mimeapps, "utf8");
     assert.match(contents, /^x-scheme-handler\/t3code=t3code-nightly\.desktop;$/mu);
     assert.match(contents, /^text\/plain=org\.example\.Editor\.desktop;$/mu);
@@ -489,4 +577,26 @@ test("Secret Service store reads and clears values for the current application",
   assert.equal(values.get(`${application}:t3-connect-clerk-client`), "saved-client-token");
   await store.remove("t3-connect-clerk-client");
   assert.equal(values.size, 0);
+});
+
+// Exercise the real desktop registry in a child so the user's MIME settings stay untouched.
+test("native callback routing replaces and restores a quoted desktop owner through GIO", async () => {
+  const root = await mkdtemp(join(tmpdir(), "t3-callback-gio-"));
+  try {
+    const result = spawnSync(process.execPath, ["--import", "tsx", fileURLToPath(new URL("./fixtures/callback-routing.ts", import.meta.url))], {
+      encoding: "utf8",
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        XDG_CONFIG_HOME: join(root, "config"), XDG_DATA_HOME: join(root, "data"),
+        XDG_CONFIG_DIRS: join(root, "system-config"), XDG_DATA_DIRS: join(root, "system-data"),
+        XDG_CURRENT_DESKTOP: "Hyprland", LC_ALL: "C",
+      },
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /T3_CALLBACK_ROUTING_OK/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

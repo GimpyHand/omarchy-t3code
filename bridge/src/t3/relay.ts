@@ -1,26 +1,22 @@
+import { TokenStore } from "@t3tools/client-runtime/authorization";
 import {
-  RemoteEnvironmentAuthorization,
-  TokenStore,
-} from "@t3tools/client-runtime/authorization";
-import { ConnectionBlockedError, type PreparedConnection } from "@t3tools/client-runtime/connection";
-import { ClientPresentation } from "@t3tools/client-runtime/platform";
+  ConnectionBlockedError,
+  type PreparedConnection,
+} from "@t3tools/client-runtime/connection";
+import { ClientCapabilities } from "@t3tools/client-runtime/platform";
+import * as Scope from "effect/Scope";
+import * as Exit from "effect/Exit";
 import { ManagedRelay } from "@t3tools/client-runtime/relay";
-import {
-  AuthOrchestrationOperateScope,
-  AuthOrchestrationReadScope,
-  EnvironmentId,
-} from "@t3tools/contracts";
-import {
-  RelayEnvironmentConnectScope,
-  RelayWebClientId,
-  type RelayClientEnvironmentRecord,
-} from "@t3tools/contracts/relay";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { RelayWebClientId, type RelayClientEnvironmentRecord } from "@t3tools/contracts/relay";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 
 import * as UpstreamRemoteAuthorization from "../../../upstream/t3code/packages/client-runtime/src/authorization/service.ts";
+import { appendOrchestrationProtocol } from "../../../upstream/t3code/packages/client-runtime/src/connection/compatibility.ts";
+import { fetchEnvironmentThreadHistoryPage } from "../../../upstream/t3code/packages/client-runtime/src/state/threadHistoryHttp.ts";
 import packageMetadata from "../../../package.json" with { type: "json" };
 
 import type { AuthProvider } from "../auth/provider.ts";
@@ -44,7 +40,10 @@ function relayFailure(
   credentialKind: "oauth_token" | "clerk_session",
 ): BridgeError {
   const value = error as { _tag?: string; relayError?: { reason?: string } };
-  if (value?._tag === "ManagedRelayRequestFailedError" && value.relayError?.reason === "invalid_bearer") {
+  if (
+    value?._tag === "ManagedRelayRequestFailedError" &&
+    value.relayError?.reason === "invalid_bearer"
+  ) {
     if (credentialKind === "clerk_session") {
       return new BridgeError(
         "RELAY_AUTH_REJECTED",
@@ -52,18 +51,18 @@ function relayFailure(
         false,
       );
     }
-    return new BridgeError(
-      "UPSTREAM_OAUTH_DPOP_UNSUPPORTED",
-      OAUTH_DPOP_BLOCKED_MESSAGE,
-      false,
-    );
+    return new BridgeError("UPSTREAM_OAUTH_DPOP_UNSUPPORTED", OAUTH_DPOP_BLOCKED_MESSAGE, false);
   }
   return new BridgeError("RELAY_UNAVAILABLE", redactText(error), true);
 }
 
 export class T3RelayClient {
   private relay: ManagedRelay.ManagedRelayClient["Service"] | null = null;
-  private remote: RemoteEnvironmentAuthorization["Service"] | null = null;
+  private remote: Promise<
+    UpstreamRemoteAuthorization.RemoteEnvironmentAuthorization["Service"]
+  > | null = null;
+  private scope: Scope.Closeable | null = null;
+  private identity: ClientCapabilities.CloudSessionIdentity | null = null;
   private readonly environments = new Map<string, RelayClientEnvironmentRecord>();
 
   constructor(
@@ -82,8 +81,29 @@ export class T3RelayClient {
     return this.relay;
   }
 
-  private async remoteAuthorization(): Promise<RemoteEnvironmentAuthorization["Service"]> {
-    if (this.remote !== null) return this.remote;
+  private remoteAuthorization(): Promise<
+    UpstreamRemoteAuthorization.RemoteEnvironmentAuthorization["Service"]
+  > {
+    if (this.remote === null) {
+      const pending: Promise<
+        UpstreamRemoteAuthorization.RemoteEnvironmentAuthorization["Service"]
+      > = this.createRemoteAuthorization().catch(async (error: unknown) => {
+        if (this.remote === pending) {
+          this.remote = null;
+          const scope = this.scope;
+          this.scope = null;
+          if (scope !== null) await Effect.runPromise(Scope.close(scope, Exit.void));
+        }
+        throw error;
+      });
+      this.remote = pending;
+    }
+    return this.remote;
+  }
+
+  private async createRemoteAuthorization(): Promise<
+    UpstreamRemoteAuthorization.RemoteEnvironmentAuthorization["Service"]
+  > {
     const memoryTokens = new Map<string, TokenStore.RemoteDpopAccessToken>();
     const tokenLayer = TokenStore.layer({
       get: (environmentId) => Effect.succeed(Option.fromNullishOr(memoryTokens.get(environmentId))),
@@ -91,21 +111,47 @@ export class T3RelayClient {
       remove: (environmentId) => Effect.sync(() => void memoryTokens.delete(environmentId)),
     });
     const presentationLayer = Layer.succeed(
-      ClientPresentation,
-      ClientPresentation.of({
+      ClientCapabilities.ClientPresentation,
+      ClientCapabilities.ClientPresentation.of({
         metadata: CLIENT_METADATA,
-        scopes: [AuthOrchestrationReadScope, AuthOrchestrationOperateScope],
       }),
     );
-    this.remote = await Effect.runPromise(
+    const cloudLayer = Layer.succeed(ClientCapabilities.CloudSession, {
+      identity: Effect.sync(() => {
+        const accountId = this.auth.status().identity;
+        if (this.auth.status().phase !== "signedIn" || accountId === null) {
+          this.identity = null;
+          return Option.none();
+        }
+        if (this.identity?.accountId !== accountId) this.identity = { accountId };
+        return Option.some(this.identity);
+      }),
+      clerkToken: Effect.tryPromise({
+        try: async () => (await this.auth.relayCredential()).token,
+        catch: () =>
+          new ConnectionBlockedError({
+            reason: "authentication",
+            detail: "T3 Connect sign-in is unavailable. Sign in again.",
+          }),
+      }),
+    });
+    const deviceLayer = Layer.succeed(ClientCapabilities.RelayDeviceIdentity, {
+      deviceId: Effect.succeed(Option.none()),
+    });
+    const relay = await this.relayClient();
+    this.scope = Effect.runSync(Scope.make());
+    return Effect.runPromise(
       UpstreamRemoteAuthorization.make.pipe(
         Effect.provide(this.keys.signerLayer()),
         Effect.provide(tokenLayer),
         Effect.provide(presentationLayer),
+        Effect.provide(cloudLayer),
+        Effect.provide(deviceLayer),
+        Effect.provideService(ManagedRelay.ManagedRelayClient, relay),
         Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(Scope.Scope, this.scope),
       ),
     );
-    return this.remote;
   }
 
   async listEnvironments(): Promise<EnvironmentDto[]> {
@@ -129,52 +175,49 @@ export class T3RelayClient {
   }
 
   async prepareConnection(environmentId: string): Promise<PreparedConnection> {
-    const credential = await this.auth.relayCredential();
     const record = this.environments.get(environmentId);
-    if (!record) throw new BridgeError("ENVIRONMENT_NOT_FOUND", "Refresh environments and try again.");
-    const relay = await this.relayClient();
+    if (!record)
+      throw new BridgeError("ENVIRONMENT_NOT_FOUND", "Refresh environments and try again.");
     const remote = await this.remoteAuthorization();
-    let terminalAuthError: BridgeError | null = null;
     try {
       const authorized = await Effect.runPromise(
-        remote.authorizeDpop({
-          expectedEnvironmentId: EnvironmentId.make(environmentId),
-          obtainBootstrap: relay
-            .connectEnvironment({
-              clerkToken: credential.token,
-              scopes: [RelayEnvironmentConnectScope],
-              environmentId: EnvironmentId.make(environmentId),
-            })
-            .pipe(
-              Effect.mapError(
-                (error) => {
-                  const mapped = relayFailure(error, credential.kind);
-                  if (!mapped.retryable) terminalAuthError = mapped;
-                  return new ConnectionBlockedError({
-                    reason: "authentication",
-                    detail: mapped.message,
-                  });
-                },
-              ),
-            ),
-        }),
+        remote.authorizeDpop({ expectedEnvironmentId: EnvironmentId.make(environmentId) }),
       );
       return {
         environmentId: authorized.environmentId,
         label: authorized.label,
         httpBaseUrl: authorized.httpBaseUrl,
-        socketUrl: authorized.socketUrl,
+        socketUrl: appendOrchestrationProtocol(authorized.socketUrl),
         httpAuthorization: authorized.httpAuthorization,
         target: {
           _tag: "RelayConnectionTarget",
           environmentId: EnvironmentId.make(environmentId),
           label: record.label,
         },
-      } as PreparedConnection;
+      };
     } catch (error) {
       const detail = redactText(error);
-      if (terminalAuthError !== null) throw terminalAuthError;
-      throw new BridgeError("ENVIRONMENT_CONNECT_FAILED", detail, true);
+      const blocked = error instanceof ConnectionBlockedError;
+      throw new BridgeError("ENVIRONMENT_CONNECT_FAILED", detail, !blocked);
     }
+  }
+  async loadThreadHistory(prepared: PreparedConnection, threadId: string, cursor: string) {
+    const remoteAuthorization = Option.some(await this.remoteAuthorization());
+    return Effect.runPromise(Effect.gen(function* () {
+      const signer = yield* ManagedRelay.ManagedRelayDpopSigner;
+      return yield* fetchEnvironmentThreadHistoryPage({
+        prepared, threadId: ThreadId.make(threadId), cursor, signer: Option.some(signer), remoteAuthorization,
+      });
+    }).pipe(Effect.provide(this.keys.signerLayer()), Effect.provide(FetchHttpClient.layer)));
+  }
+
+  async close(): Promise<void> {
+    const pending = this.remote;
+    this.remote = null;
+    await pending?.catch(() => undefined);
+    const scope = this.scope;
+    this.scope = null;
+    this.identity = null;
+    if (scope !== null) await Effect.runPromise(Scope.close(scope, Exit.void));
   }
 }

@@ -17,9 +17,9 @@
   "omarchy": {
     "pluginId": "bralyx.t3code"
   },
-  "packageManager": "pnpm@11.10.0",
   "engines": {
-    "node": ">=24.13.1"
+    "node": ">=26.0.0",
+    "pnpm": ">=12.9.1"
   },
   "scripts": {
     "build": "pnpm --filter @omarchy-t3/bridge build",
@@ -35,18 +35,19 @@
     "verify:marketplace-runtime": "node scripts/verify-marketplace-runtime.mjs",
     "deploy:plugin": "node scripts/deploy-dev-plugin.mjs",
     "remove:plugin": "scripts/remove-package",
-    "check:t3-nightly": "node scripts/check-t3-nightly.mjs",
-    "update:t3-nightly": "node scripts/update-t3-nightly.mjs"
+    "sync:t3": "node scripts/sync-t3.mjs"
   },
   "devDependencies": {
     "@t3tools/client-runtime": "workspace:*",
     "@t3tools/shared": "workspace:*",
-    "@types/node": "24.13.3",
+    "@types/node": "catalog:",
     "effect": "catalog:",
-    "esbuild": "0.28.2",
+    "esbuild": "^0.28.2",
     "jose": "catalog:",
-    "postject": "1.0.0-alpha.6",
-    "tsx": "4.23.12",
-    "typescript": "6.0.3"
+    "postject": "^1.0.0-alpha.6",
+    "tsx": "^4.23.15",
+    "typescript": "catalog:",
+    "@t3tools/contracts": "workspace:*",
+    "yaml": "catalog:"
   }
 }

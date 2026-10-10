@@ -71,7 +71,7 @@ interrupt, model/model-option/runtime/interaction modes, settle, snooze, pin, re
 approvals, user input, and clipboard screenshot staging. Screenshot bytes stay
 in bridge memory under random, thread-bound attachment IDs; QML receives a
 data-URL preview and sends only those IDs back with the turn. The T3 adapter
-resolves them to the pinned upload contract immediately before dispatch and
+resolves them to the upstream upload contract immediately before dispatch and
 consumes them only after a successful command. QML never references an upstream
 RPC method name.
 
@@ -106,7 +106,7 @@ deployed Relay does not accept CLI OAuth at the DPoP exchange.
 
 ## Upstream runtime reuse
 
-The root pnpm workspace includes exactly the pinned source workspaces for
+The root pnpm workspace includes the upstream source workspaces for
 `@t3tools/contracts`, `@t3tools/client-runtime`, and `@t3tools/shared`. esbuild
 bundles their used dependency graph into the bridge.
 
@@ -122,7 +122,7 @@ Directly reused behavior includes:
 - pinned-order sorting and contract decoders.
 
 Pending approval and input derivation is a small, behavior-matched adapter to
-the pinned web client's `session-logic.ts`. That app-private module cannot be
+the upstream web client's `session-logic.ts`. That app-private module cannot be
 consumed directly under NodeNext without pulling in the web build's resolver;
 compatibility tests cover the adapter's event shapes and ordering. Bundled
 upstream code remains MIT-licensed and notices ship with the plugin.
@@ -149,6 +149,16 @@ Every lifecycle control is capability-gated for presentation and checked again
 in the bridge before dispatch. No settle, snooze, or pin is represented by a
 local flag.
 
+Long threads open through upstream's authenticated bounded HTTP snapshot when
+available, then resume socket events from that snapshot's sequence. The socket
+snapshot remains the fallback. Older pages use upstream HTTP authorization and
+history merge helpers; cursor requests are invalidated on snapshot replacement,
+thread close, or reconnect. History is a separate window of at most 64 messages,
+with up to 200 pending page messages. Paging moves backwards through that window;
+Jump to latest refreshes the snapshot and resumes live updates. The live
+projection continues to own queue, approval, input, and lifecycle state while
+older history is displayed.
+
 ## Packaging
 
 The public repository root is itself the single supported Omarchy plugin:
@@ -159,17 +169,17 @@ sources can coexist at the root because Omarchy loads only advertised entry
 points.
 
 esbuild produces ESM and CommonJS bridge bundles. `scripts/package.mjs` uses
-Node's current single-executable support (or the legacy postject path on Node
-24), with repository-relative SEA input paths. It runs an embedded self-test
+Node's current single-executable support, with repository-relative SEA input paths. It runs an embedded self-test
 and copies only the plugin, bundled bridge, documentation, and license notices.
 Archive entries are sorted and normalized to epoch timestamps, numeric root
-ownership, and deterministic gzip headers. The T3 source submodule is a build
+ownership, and deterministic gzip headers. The ignored T3 main checkout is a build
 input, not part of the installed plugin.
 
 The root marketplace layout stores the x86-64 executable as a compressed,
-checksum-bound local payload. CI rebuilds it with the `.node-version`-pinned
-official Linux x64 Node distribution and fails unless the tracked decompressed
-payload byte-matches the fresh source build. The launcher expands it atomically
+checksum-bound local payload. CI reproduces its source commit and Node builder from
+`lib/runtime-build.json` using the official Linux x64 Node distribution and fails unless the tracked decompressed
+payload byte-matches that source build. A separate job tests latest T3 main
+and latest Node without requiring it to match an older shipped binary. The launcher expands it atomically
 inside the plugin checkout on first use and replaces it when a future payload
 checksum changes. Release packages instead carry the executable directly and
 retain the ESM bundle only as a diagnostic fallback when a compatible `node`

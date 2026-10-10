@@ -1,14 +1,10 @@
+import { ThreadId } from "@t3tools/contracts";
 import assert from "node:assert/strict";
 import test from "node:test";
-
-import type {
-  OrchestrationShellSnapshot,
-  OrchestrationThread,
-  OrchestrationThreadActivity,
-  OrchestrationThreadShell,
-} from "../upstream/t3code/packages/contracts/src/index.ts";
+import * as DateTime from "effect/DateTime";
 import { T3Projection } from "../bridge/src/t3/projection.ts";
 import type { InboxDto, ThreadDto } from "../bridge/src/protocol/types.ts";
+import { event } from "../bridge/src/protocol/output.ts";
 import {
   boundInboxDto,
   boundShellSnapshot,
@@ -16,253 +12,110 @@ import {
   boundThreadDto,
   fitsIpcPayload,
   MAX_IPC_JSON_BYTES,
-  MAX_MESSAGE_TEXT_CHARS,
   MAX_SHELL_THREADS,
   MAX_STORED_THREAD_MESSAGES,
-  MAX_THREAD_ACTIVITIES,
+  MAX_MESSAGE_TEXT_CHARS,
   selectNewestByUpdatedAt,
   truncateText,
 } from "../bridge/src/t3/bounds.ts";
-import { event } from "../bridge/src/protocol/output.ts";
-
-function shellThread(id: string, updatedAt: string): OrchestrationThreadShell {
-  return {
-    id,
-    projectId: "project-1",
-    title: id,
-    modelSelection: { instanceId: "codex", model: "gpt-5.6" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    branch: null,
-    worktreePath: null,
-    latestTurn: null,
-    createdAt: updatedAt,
-    updatedAt,
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    snoozedUntil: null,
-    snoozedAt: null,
-    pinnedAt: null,
-    pinOrderKey: null,
-    titleRegeneration: null,
-    session: null,
-    latestUserMessageAt: null,
-    hasPendingApprovals: false,
-    hasPendingUserInput: false,
-    hasActionableProposedPlan: false,
-  } as unknown as OrchestrationThreadShell;
-}
-
-function baseThread(): OrchestrationThread {
-  return {
-    id: "thread-1",
-    projectId: "project-1",
-    title: "Thread",
-    modelSelection: { instanceId: "codex", model: "gpt-5.6" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    branch: null,
-    worktreePath: null,
-    latestTurn: null,
-    createdAt: "2026-08-31T00:00:00.000Z",
-    updatedAt: "2026-08-31T00:00:00.000Z",
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    deletedAt: null,
-    messages: [],
-    proposedPlans: [],
-    activities: [],
-    checkpoints: [],
-    session: null,
-  } as unknown as OrchestrationThread;
-}
-
-function threadStreamEvent(
-  type: string,
-  payload: Record<string, unknown>,
-  index: number,
-): Parameters<T3Projection["applyThread"]>[0] {
-  return {
-    kind: "event",
-    event: {
-      sequence: index + 1,
-      eventId: `event-${index}`,
-      aggregateKind: "thread",
-      aggregateId: "thread-1",
-      occurredAt: "2026-08-31T00:00:00.000Z",
-      commandId: `cmd-${index}`,
-      causationEventId: null,
-      correlationId: null,
-      metadata: {},
-      type,
-      payload,
-    },
-  } as unknown as Parameters<T3Projection["applyThread"]>[0];
-}
-
+import {
+  v2Projection,
+  v2ShellSnapshot,
+  v2ThreadShell,
+  message,
+  eventBase,
+  itemBase,
+} from "./fixtures/t3.ts";
 test("selectNewestByUpdatedAt keeps the newest items without sorting the full input", () => {
-  const threads = Array.from({ length: MAX_SHELL_THREADS + 25 }, (_, index) =>
-    shellThread(`thread-${index}`, new Date(Date.UTC(2026, 0, 1) + index * 60_000).toISOString()),
-  );
+  const threads = Array.from({ length: MAX_SHELL_THREADS + 25 }, (_, index) => ({
+    id: `thread-${index}`,
+    updatedAt: new Date(Date.UTC(2026, 0, 1) + index * 60_000).toISOString(),
+  }));
   const selected = selectNewestByUpdatedAt(threads, MAX_SHELL_THREADS);
   assert.equal(selected.length, MAX_SHELL_THREADS);
   assert.equal(selected[0]?.id, `thread-${MAX_SHELL_THREADS + 24}`);
   assert.equal(selected.at(-1)?.id, "thread-25");
 });
 
-test("boundShellSnapshot keeps the newest threads and projects", () => {
-  const threads = Array.from({ length: MAX_SHELL_THREADS + 25 }, (_, index) =>
-    shellThread(`thread-${index}`, new Date(Date.UTC(2026, 0, 1) + index * 60_000).toISOString()),
-  );
-  const snapshot = {
-    snapshotSequence: 1,
-    updatedAt: "2026-08-31T00:00:00.000Z",
-    projects: [{
-      id: "project-1",
-      title: "Project",
-      workspaceRoot: "/tmp/project",
-      defaultModelSelection: null,
-      scripts: [],
-      createdAt: "2026-08-31T00:00:00.000Z",
-      updatedAt: "2026-08-31T00:00:00.000Z",
-    }],
-    threads,
-  } as unknown as OrchestrationShellSnapshot;
-
-  const bounded = boundShellSnapshot(snapshot);
+test("shell snapshots retain the newest V2 threads and decoded timestamps", () => {
+  const threads = Array.from({ length: MAX_SHELL_THREADS + 25 }, (_, index) => ({
+    ...v2ThreadShell,
+    id: ThreadId.make("thread-" + index),
+    updatedAt: DateTime.makeUnsafe(index * 1000),
+  }));
+  const bounded = boundShellSnapshot({ ...v2ShellSnapshot, threads });
   assert.equal(bounded.threads.length, MAX_SHELL_THREADS);
-  assert.equal(bounded.threads[0]?.id, `thread-${MAX_SHELL_THREADS + 24}`);
+  assert.equal(bounded.threads[0]?.id, "thread-" + (MAX_SHELL_THREADS + 24));
+  assert(DateTime.isDateTime(bounded.threads[0]?.updatedAt));
 });
 
-test("boundThread truncates message text and keeps the newest messages", () => {
-  const messages = Array.from({ length: MAX_STORED_THREAD_MESSAGES + 5 }, (_, index) => ({
-    id: `message-${index}`,
-    role: "assistant" as const,
-    text: "x".repeat(MAX_MESSAGE_TEXT_CHARS + 100),
-    attachments: [],
-    turnId: null,
-    streaming: false,
-    createdAt: "2026-08-31T00:00:00.000Z",
-    updatedAt: "2026-08-31T00:00:00.000Z",
-  }));
-  const bounded = boundThread({ ...baseThread(), messages } as unknown as OrchestrationThread);
+test("V2 projection bounds messages and structured timeline rows", () => {
+  const messages = Array.from({ length: MAX_STORED_THREAD_MESSAGES + 5 }, (_, index) =>
+    message("x".repeat(MAX_MESSAGE_TEXT_CHARS + 100), false, "message-" + index),
+  );
+  const bounded = boundThread({ ...v2Projection, messages });
   assert.equal(bounded.messages.length, MAX_STORED_THREAD_MESSAGES);
-  assert.equal(bounded.messages.at(-1)?.id, `message-${MAX_STORED_THREAD_MESSAGES + 4}`);
   assert.equal(bounded.messages.at(-1)?.text.length, MAX_MESSAGE_TEXT_CHARS);
 });
 
-test("boundActivity strips oversized nested payload fields", () => {
-  const activity: OrchestrationThreadActivity = {
-    id: "activity-1",
-    tone: "neutral",
-    kind: "approval.requested",
-    summary: "Approve",
-    payload: {
-      requestId: "req-1",
-      requestKind: "command",
-      detail: "ok",
-      nested: { blob: "z".repeat(100_000) },
-    },
-    turnId: null,
-    createdAt: "2026-08-31T00:00:00.000Z",
-  } as unknown as OrchestrationThreadActivity;
-  const bounded = boundThread({
-    ...baseThread(),
-    activities: [activity],
-  } as unknown as OrchestrationThread);
-  const payload = bounded.activities[0]?.payload as Record<string, unknown> | null;
-  assert.deepEqual(payload, {
-    requestId: "req-1",
-    requestKind: "command",
-    detail: "ok",
-  });
+test("V2 projection drops nested raw tool payloads from retained state", () => {
+  const tool = {
+    ...itemBase("tool-1"),
+    type: "dynamic_tool" as const,
+    toolName: "test",
+    input: { blob: "x".repeat(100000) },
+    output: { blob: "y".repeat(100000) },
+  };
+  const bounded = boundThread({ ...v2Projection, turnItems: [tool] });
+  const item = bounded.turnItems[0];
+  assert.equal(item?.type, "dynamic_tool");
+  if (item?.type === "dynamic_tool") {
+    assert.equal(item.input, null);
+    assert.equal(item.output, null);
+  }
 });
 
-test("applyShell re-bounds reducer output after repeated thread upserts", () => {
+test("shell reducer output stays bounded across repeated V2 updates", () => {
   const projection = new T3Projection();
-  projection.applyShell({
-    kind: "snapshot",
-    snapshot: {
-      snapshotSequence: 1,
-      updatedAt: "2026-08-31T00:00:00.000Z",
-      projects: [],
-      threads: [shellThread("thread-0", "2026-08-31T00:00:00.000Z")],
-    },
-  } as unknown as Parameters<T3Projection["applyShell"]>[0]);
-
-  for (let index = 1; index <= MAX_SHELL_THREADS + 10; index++) {
+  projection.applyShell({ kind: "snapshot", snapshot: { ...v2ShellSnapshot, threads: [] } });
+  for (let index = 0; index < MAX_SHELL_THREADS + 5; index++)
     projection.applyShell({
-      kind: "thread-upserted",
-      sequence: index,
-      thread: shellThread(
-        `thread-${index}`,
-        new Date(Date.UTC(2026, 0, 1) + index * 60_000).toISOString(),
-      ),
-    } as unknown as Parameters<T3Projection["applyShell"]>[0]);
-  }
-
+      kind: "thread.updated",
+      sequence: index + 2,
+      location: "active",
+      thread: {
+        ...v2ThreadShell,
+        id: ThreadId.make("thread-" + index),
+        updatedAt: DateTime.makeUnsafe(index * 1000),
+      },
+    });
   assert.equal(projection.shell?.threads.length, MAX_SHELL_THREADS);
 });
 
-test("applyThread re-bounds reducer output after repeated message events", () => {
+test("thread reducer output stays bounded and ignores replayed V2 events", () => {
   const projection = new T3Projection();
-  projection.applyThread({
-    kind: "snapshot",
-    snapshot: {
-      thread: baseThread(),
-      sequence: 1,
-    },
-  } as unknown as Parameters<T3Projection["applyThread"]>[0]);
-
-  for (let index = 0; index < MAX_STORED_THREAD_MESSAGES + 5; index++) {
-    projection.applyThread(
-      threadStreamEvent("thread.message-sent", {
-        threadId: "thread-1",
-        messageId: `message-${index}`,
-        role: "assistant",
-        text: "hello",
-        turnId: null,
-        streaming: false,
-        createdAt: "2026-08-31T00:00:00.000Z",
-        updatedAt: "2026-08-31T00:00:00.000Z",
-      }, index),
-    );
-  }
-
+  projection.applyThread({ kind: "snapshot", projection: v2Projection, snapshotSequence: 1 });
+  for (let index = 0; index < MAX_STORED_THREAD_MESSAGES + 5; index++)
+    projection.applyThread({
+      kind: "event",
+      sequence: index + 2,
+      event: {
+        ...eventBase(index),
+        type: "message.updated",
+        payload: message("x".repeat(MAX_MESSAGE_TEXT_CHARS + 100), false, "message-" + index),
+      },
+    });
   assert.equal(projection.thread?.messages.length, MAX_STORED_THREAD_MESSAGES);
+  assert.equal(projection.thread?.messages.at(-1)?.text.length, MAX_MESSAGE_TEXT_CHARS);
+  assert.equal(
+    projection.applyThread({
+      kind: "event",
+      sequence: 2,
+      event: { ...eventBase(1), type: "message.updated", payload: message("old") },
+    }),
+    false,
+  );
 });
-
-test("applyThread re-bounds reducer output after repeated activity appends", () => {
-  const projection = new T3Projection();
-  projection.applyThread({
-    kind: "snapshot",
-    snapshot: { thread: baseThread(), sequence: 1 },
-  } as unknown as Parameters<T3Projection["applyThread"]>[0]);
-
-  for (let index = 0; index < MAX_THREAD_ACTIVITIES + 5; index++) {
-    projection.applyThread(
-      threadStreamEvent("thread.activity-appended", {
-        threadId: "thread-1",
-        activity: {
-          id: `activity-${index}`,
-          tone: "neutral",
-          kind: "tool.started",
-          summary: "Working",
-          payload: { blob: "x".repeat(50_000) },
-          turnId: null,
-          createdAt: "2026-08-31T00:00:00.000Z",
-        },
-      }, index),
-    );
-  }
-
-  assert.equal(projection.thread?.activities.length, MAX_THREAD_ACTIVITIES);
-  const payload = projection.thread?.activities.at(-1)?.payload as Record<string, unknown> | null;
-  assert.equal(payload, null);
-});
-
 test("bounded inbox and thread IPC payloads stay under the NDJSON cap", () => {
   const huge = "z".repeat(MAX_MESSAGE_TEXT_CHARS);
   const inbox: InboxDto = {
@@ -323,6 +176,10 @@ test("bounded inbox and thread IPC payloads stay under the NDJSON cap", () => {
     lifecycle: "active",
     sessionError: null,
     capabilities: inbox.capabilities,
+    queue: { held: true, canManage: true, total: 30, messages: Array.from({ length: 30 }, (_, index) => ({
+      runId: `queued-${index}`, text: huge, editable: true, attachmentCount: 1,
+    })) },
+    history: { hasMore: false, browsing: false, loading: false, error: null },
     messages: Array.from({ length: MAX_STORED_THREAD_MESSAGES + 10 }, (_, index) => ({
       id: `message-${index}`,
       role: "assistant",
@@ -339,8 +196,15 @@ test("bounded inbox and thread IPC payloads stay under the NDJSON cap", () => {
   };
 
   assert.ok(fitsIpcPayload(event("inbox.changed", boundInboxDto(inbox))));
+  const boundedQueue = boundThreadDto(thread).queue;
+  assert.equal(boundedQueue.total, 30);
+  assert.equal(boundedQueue.messages.length, 16);
+  assert.equal(boundedQueue.messages[0]?.text.length, 4096);
+  assert.equal(boundedQueue.messages[0]?.editable, false);
   assert.ok(fitsIpcPayload(event("thread.snapshot", boundThreadDto(thread))));
-  assert.ok(ipcJsonByteLength(event("thread.snapshot", boundThreadDto(thread))) <= MAX_IPC_JSON_BYTES);
+  assert.ok(
+    ipcJsonByteLength(event("thread.snapshot", boundThreadDto(thread))) <= MAX_IPC_JSON_BYTES,
+  );
 });
 
 function ipcJsonByteLength(value: unknown): number {

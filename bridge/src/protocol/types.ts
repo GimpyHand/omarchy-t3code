@@ -118,6 +118,19 @@ export interface MessageDto {
   createdAt: string;
   updatedAt: string;
   attachments: ImageAttachmentDto[];
+  delivery?: "queued" | "steer";
+}
+
+export interface ThreadQueueDto {
+  held: boolean;
+  canManage: boolean;
+  total: number;
+  messages: Array<{
+    runId: string;
+    text: string;
+    editable: boolean;
+    attachmentCount: number;
+  }>;
 }
 
 export interface ChangedFileDto {
@@ -192,6 +205,8 @@ export interface ThreadDto {
   sessionError: string | null;
   capabilities: CapabilitiesDto;
   messages: MessageDto[];
+  queue: ThreadQueueDto;
+  history: { hasMore: boolean; browsing: boolean; loading: boolean; error: string | null };
   diffs: TurnDiffSummaryDto[];
   approvals: ApprovalDto[];
   inputs: InputRequestDto[];
@@ -226,9 +241,14 @@ export type RequestType =
   | "attachment.discard"
   | "thread.open"
   | "thread.close"
+  | "thread.history.load"
+  | "thread.history.latest"
   | "thread.create"
   | "thread.send"
   | "thread.interrupt"
+  | "thread.queue.resume"
+  | "thread.queue.cancel"
+  | "thread.queue.edit"
   | "thread.settle"
   | "thread.unsettle"
   | "thread.snooze"

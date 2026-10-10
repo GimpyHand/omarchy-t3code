@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { upstreamBuild } from "../bridge/src/t3/upstreamBuild.ts";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { chmod, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
@@ -19,14 +20,9 @@ if (process.platform !== "linux" || process.arch !== "x64") {
   throw new Error("The marketplace payload must be built on x86-64 Linux.");
 }
 
-const [metadata, lock] = await Promise.all([
-  readFile(join(root, "package.json"), "utf8").then(JSON.parse),
-  readFile(join(root, "t3-upstream.lock.json"), "utf8").then(JSON.parse),
-]);
-const expectedNodeVersion = (await readFile(join(root, ".node-version"), "utf8")).trim();
-if (process.version !== `v${expectedNodeVersion}`) {
-  throw new Error(`Marketplace payloads must be built with Node ${expectedNodeVersion}; received ${process.version}.`);
-}
+const metadata = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+if (Number(process.versions.node.split(".")[0]) < 26) throw new Error("Marketplace builds require Node 26 or newer.");
+
 const selfTest = spawnSync(executable, ["--self-test"], {
   cwd: root,
   encoding: "utf8",
@@ -36,9 +32,13 @@ if (selfTest.error || selfTest.status !== 0) {
   throw selfTest.error ?? new Error(`Standalone bridge self-test failed with status ${selfTest.status}.`);
 }
 const result = JSON.parse(selfTest.stdout.trim());
-if (result.ok !== true || result.bridgeVersion !== metadata.version || result.upstreamCommit !== lock.commit) {
-  throw new Error("The standalone bridge does not match project metadata and the pinned T3 revision.");
+if (result.nodeVersion !== process.version) throw new Error("The packaged bridge was built with a different Node runtime. Rebuild it before bundling.");
+if (result.ok !== true || result.bridgeVersion !== metadata.version || result.upstreamCommit !== upstreamBuild.commit || result.clerkJsVersion !== upstreamBuild.clerkJsVersion || result.electronSdkVersion !== upstreamBuild.electronSdkVersion) {
+  throw new Error("The standalone bridge does not match project metadata and the T3 source checkout.");
 }
+
+await cp(join(root, "dist", "plugin", "licenses"), join(root, "licenses"), { recursive: true });
+await writeFile(join(root, "lib", "runtime-build.json"), `${JSON.stringify({ ...upstreamBuild, nodeVersion: result.nodeVersion }, null, 2)}\n`);
 
 const hash = createHash("sha256");
 await new Promise((resolveHash, rejectHash) => {

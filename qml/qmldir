@@ -10,6 +10,7 @@ MessageBubble 1.0 MessageBubble.qml
 ModelDropdown 1.0 ModelDropdown.qml
 ModelOptionsPicker 1.0 ModelOptionsPicker.qml
 Panel 1.0 Panel.qml
+QueueCard 1.0 QueueCard.qml
 Service 1.0 Service.qml
 T3Mark 1.0 T3Mark.qml
 ThreadMetaRow 1.0 ThreadMetaRow.qml

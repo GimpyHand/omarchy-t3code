@@ -22,3 +22,5 @@ credentials.json
 .plans/
 .agent/
 agent-transcripts/
+
+upstream/t3code/

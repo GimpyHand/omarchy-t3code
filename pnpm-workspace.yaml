@@ -9,17 +9,32 @@ allowBuilds:
   msgpackr-extract: true
 
 catalog:
-  "@effect/platform-node": 4.0.0-beta.103
-  "@effect/vitest": 4.0.0-beta.103
-  "@noble/curves": 1.9.1
-  "@noble/hashes": 1.8.0
-  "@types/node": 24.13.3
-  effect: 4.0.0-beta.103
-  jose: 6.2.2
-  typescript: 6.0.3
-  vite: npm:@voidzero-dev/vite-plus-core@0.2.2
-  vite-plus: 0.2.2
-  yaml: ^2.9.0
+  "@effect/platform-node": 4.0.1
+  "@effect/vitest": 4.0.1
+  "@noble/curves": ^1.9.7
+  "@noble/hashes": ^1.8.0
+  "@types/node": ^26.6.4
+  "effect": 4.0.1
+  jose: ^6.2.12
+  typescript: ^7.0.2
+  vite: npm:@voidzero-dev/vite-plus-core@1.1.0
+  vite-plus: ^1.1.0
+  yaml: ^2.9.1
+
+minimumReleaseAgeExclude:
+  - "@voidzero-dev/vite-plus-core@1.1.0"
+  - "@voidzero-dev/vite-plus-darwin-arm64@1.1.0"
+  - "@voidzero-dev/vite-plus-darwin-x64@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-gnu@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-musl@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-x64-gnu@1.1.0"
+  - "@voidzero-dev/vite-plus-linux-x64-musl@1.1.0"
+  - "@voidzero-dev/vite-plus-win32-arm64-msvc@1.1.0"
+  - "@voidzero-dev/vite-plus-win32-x64-msvc@1.1.0"
+  - vite-plus@1.1.0
 
 patchedDependencies:
-  effect@4.0.0-beta.103: upstream/t3code/patches/effect@4.0.0-beta.103.patch
+
+  "effect@4.0.1": upstream/t3code/patches/effect@4.0.1.patch
+
+  "@effect/vitest@4.0.1": upstream/t3code/patches/@effect__vitest@4.0.1.patch

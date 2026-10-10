@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { decodeRequestLine, ProtocolDecodeError } from "../bridge/src/protocol/decode.ts";
+import type { BridgeOutput } from "../bridge/src/protocol/types.ts";
+import { v2Projection } from "./fixtures/t3.ts";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -113,8 +114,48 @@ test("NDJSON bridge correlates concurrent responses and survives malformed input
   assert.equal(exitCode, 0);
 });
 
-test("NDJSON requests are dispatched sequentially", async () => {
-  const channel = await readFile(join(root, "bridge", "src", "ipc", "ndjson.ts"), "utf8");
-  assert.match(channel, /private handling = Promise\.resolve\(\)/u);
-  assert.match(channel, /this\.handling = this\.handling\s*\.then\(\(\) => this\.handler\.handle\(request\)\)/u);
-});
+for (const historyType of ["thread.history.load", "thread.history.latest"]) {
+  test(`NDJSON ${historyType} preserves ordering without blocking live controls or close`, { timeout: 10_000 }, async (t) => {
+    const child = spawn(process.execPath, ["--import", "tsx", "tests/fixtures/history-ipc.ts"], {
+      cwd: root, stdio: ["pipe", "pipe", "pipe"],
+    });
+    t.after(() => { child.kill(); });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    const scope = { environmentId: "environment-1", threadId: v2Projection.thread.id };
+    const requests = [
+      { requestId: "open", type: "thread.open", payload: scope },
+      { requestId: "history", type: historyType, payload: scope },
+      ...(historyType === "thread.history.load" ? [{ requestId: "duplicate", type: historyType, payload: scope }] : []),
+      { requestId: "interrupt", type: "thread.interrupt", payload: scope },
+      { requestId: "approval", type: "approval.respond", payload: { ...scope, requestId: "approval", decision: "decline" } },
+      { requestId: "input", type: "input.respond", payload: { ...scope, requestId: "input", answers: { question: "answer" } } },
+      { requestId: "send", type: "thread.send", payload: { ...scope, text: "Follow up" } },
+      { requestId: "close", type: "thread.close", payload: {} },
+    ];
+    const output = createInterface({ input: child.stdout });
+    child.stdin.write(requests.map((request) => JSON.stringify({ protocolVersion: 1, ...request })).join("\n") + "\n");
+    const messages: BridgeOutput[] = [];
+    for await (const line of output) {
+      messages.push(JSON.parse(line) as BridgeOutput);
+      if (messages.filter((message) => message.type === "response").length === requests.length) break;
+    }
+    const responses = messages.filter((message) => message.type === "response");
+    assert.equal(responses.length, requests.length, stderr);
+    assert(responses.every((message) => message.ok), JSON.stringify(responses));
+    assert.deepEqual(responses.map((message) => message.requestId), [
+      "open", ...(historyType === "thread.history.load" ? ["duplicate"] : ["history"]),
+      "interrupt", "approval", "input", "send", "close", ...(historyType === "thread.history.load" ? ["history"] : []),
+    ]);
+    assert.deepEqual(responses.filter((message) => message.ok && ["interrupt", "approval", "input", "send"].includes(message.requestId)).map((message) => message.ok && message.payload), [
+      { sequence: 1 }, { sequence: 2 }, { sequence: 3 }, { sequence: 4 },
+    ]);
+    const historyResponse = responses.find((message) => message.requestId === "history");
+    assert.deepEqual(historyResponse?.ok && historyResponse.payload, historyType === "thread.history.load" ? { loaded: false } : {});
+    assert.equal(messages.filter((message) => message.type === "event" && message.event === "thread.snapshot").length, historyType === "thread.history.load" ? 2 : 1);
+    const exit = once(child, "exit");
+    child.stdin.end();
+    const [exitCode] = await exit;
+    assert.equal(exitCode, 0, stderr);
+  });
+}

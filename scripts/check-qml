@@ -50,4 +50,16 @@ if (( qml_status != 0 )) || [[ $qml_output != *T3_QML_SMOKE_OK* ]] || [[ $qml_ou
   exit 1
 fi
 
-echo "QML manifest, syntax, imports, and component compilation passed."
+cp "$repo_root/tests/qml/History.qml" "$qml_smoke_root/history.qml"
+set +e
+qml_output=$(QML_IMPORT_PATH="$qml_import_root" \
+  QT_QPA_PLATFORM=offscreen \
+  timeout 10s quickshell -p "$qml_smoke_root/history.qml" 2>&1)
+qml_status=$?
+set -e
+if (( qml_status != 0 )) || [[ $qml_output != *T3_HISTORY_QML_OK* ]]; then
+  printf '%s\n' "$qml_output" >&2
+  exit 1
+fi
+
+echo "QML manifest, syntax, imports, component compilation, and history scroll check passed."

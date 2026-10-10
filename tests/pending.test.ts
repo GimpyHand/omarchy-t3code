@@ -1,40 +1,64 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
-import type { OrchestrationThreadActivity } from "../upstream/t3code/packages/contracts/src/index.ts";
 import { derivePendingApprovals, derivePendingInputs } from "../bridge/src/t3/pending.ts";
+import { v2Projection, itemBase, request } from "./fixtures/t3.ts";
 
-function activity(id: string, sequence: number, kind: string, payload: unknown): OrchestrationThreadActivity {
-  return {
-    id,
-    sequence,
-    tone: "approval",
-    kind,
-    summary: kind,
-    payload,
-    turnId: null,
-    createdAt: `2026-08-22T00:00:0${sequence}.000Z`,
-  } as OrchestrationThreadActivity;
-}
-
-test("pending approval projection follows request/resolution events", () => {
-  const requested = activity("a", 1, "approval.requested", { requestId: "request-1", requestKind: "command", detail: "npm test" });
-  assert.deepEqual(derivePendingApprovals([requested]), [{ requestId: "request-1", requestKind: "command", detail: "npm test", createdAt: requested.createdAt }]);
-  assert.deepEqual(derivePendingApprovals([requested, activity("b", 2, "approval.resolved", { requestId: "request-1" })]), []);
-  const applyPatch = activity("c", 3, "approval.requested", { requestId: "request-2", requestType: "apply_patch_approval" });
-  assert.equal(derivePendingApprovals([applyPatch])[0]?.requestKind, "file-change");
-  const unknown = activity("d", 4, "approval.requested", { requestId: "request-3", requestType: "commandish" });
-  assert.deepEqual(derivePendingApprovals([unknown]), []);
+test("pending approval projection follows V2 request state and response capability", () => {
+  const pending = request("command");
+  const item = {
+    ...itemBase("approval"),
+    type: "approval_request" as const,
+    requestId: pending.id,
+    requestKind: "command" as const,
+    prompt: "Run the command?",
+  };
+  const projection = { ...v2Projection, runtimeRequests: [pending], turnItems: [item] };
+  assert.deepEqual(
+    derivePendingApprovals(projection).map((entry) => entry.detail),
+    ["Run the command?"],
+  );
+  assert.deepEqual(
+    derivePendingApprovals({
+      ...projection,
+      runtimeRequests: [{ ...pending, status: "resolved" }],
+    }),
+    [],
+  );
+  assert.deepEqual(
+    derivePendingApprovals({
+      ...projection,
+      runtimeRequests: [
+        { ...pending, responseCapability: { type: "not_resumable", reason: "Ended" } },
+      ],
+    }),
+    [],
+  );
 });
 
-test("pending user input keeps exact Nightly question/option semantics", () => {
-  const request = activity("q", 1, "user-input.requested", {
-    requestId: "input-1",
-    questions: [{ id: "framework", header: "Framework", question: "Choose one", multiSelect: false, options: [{ label: "QML", description: "Native shell UI" }] }],
-  });
-  const projected = derivePendingInputs([request]);
-  assert.equal(projected[0]?.questions[0]?.id, "framework");
-  assert.equal(projected[0]?.questions[0]?.options[0]?.label, "QML");
-  assert.equal(projected[0]?.questions[0]?.options[0]?.description, "Native shell UI");
-  assert.deepEqual(derivePendingInputs([request, activity("r", 2, "user-input.resolved", { requestId: "input-1" })]), []);
+test("pending V2 questions preserve explanations and multiple selection", () => {
+  const pending = request("user_input");
+  const questions = [
+    {
+      id: "q1",
+      header: "Choice",
+      question: "Which option?",
+      multiSelect: true,
+      options: [
+        { label: "A", description: "First" },
+        { label: "B", description: "Second" },
+      ],
+    },
+  ];
+  const item = {
+    ...itemBase("question"),
+    type: "user_input_request" as const,
+    requestId: pending.id,
+    questions,
+  };
+  const projection = { ...v2Projection, runtimeRequests: [pending], turnItems: [item] };
+  assert.deepEqual(derivePendingInputs(projection)[0]?.questions, questions);
+  assert.deepEqual(
+    derivePendingInputs({ ...projection, runtimeRequests: [{ ...pending, status: "cancelled" }] }),
+    [],
+  );
 });

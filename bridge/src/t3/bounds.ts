@@ -1,16 +1,10 @@
-import type {
-  ModelSelection,
-  OrchestrationCheckpointSummary,
-  OrchestrationMessage,
-  OrchestrationProjectShell,
-  OrchestrationSession,
-  OrchestrationShellSnapshot,
-  OrchestrationShellStreamItem,
-  OrchestrationThread,
-  OrchestrationThreadActivity,
-  OrchestrationThreadShell,
-  ProjectScript,
+import {
+  OrchestrationV2ShellSnapshot,
+  OrchestrationV2ThreadProjection,
+  type OrchestrationV2ShellStreamItem,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Schema from "effect/Schema";
 
 import type { InboxDto, ThreadDto } from "../protocol/types.ts";
 
@@ -40,6 +34,7 @@ export const MAX_MESSAGE_DELTA_CHARS = 8_192;
 export const MAX_INBOX_THREADS_PER_SECTION = 200;
 export const MAX_INBOX_SUMMARY_TITLE_CHARS = 256;
 export const MAX_IPC_THREAD_MESSAGES = 64;
+export const MAX_IPC_QUEUE_MESSAGES = 16;
 export const MAX_IPC_MESSAGE_TEXT_CHARS = 4_096;
 export const MAX_IPC_JSON_BYTES = 512 * 1024;
 export const MAX_IPC_LINE_CHARS = MAX_IPC_JSON_BYTES;
@@ -57,12 +52,22 @@ function tail<T>(items: readonly T[], max: number): T[] {
   return items.length <= max ? [...items] : items.slice(items.length - max);
 }
 
-function compareUpdatedAt<T extends { updatedAt: string; id: string }>(left: T, right: T): number {
-  return Date.parse(left.updatedAt) - Date.parse(right.updatedAt) || left.id.localeCompare(right.id);
+function compareUpdatedAt<T extends { updatedAt: string | DateTime.Utc; id: string }>(
+  left: T,
+  right: T,
+): number {
+  return (
+    (typeof left.updatedAt === "string"
+      ? Date.parse(left.updatedAt)
+      : DateTime.toEpochMillis(left.updatedAt)) -
+      (typeof right.updatedAt === "string"
+        ? Date.parse(right.updatedAt)
+        : DateTime.toEpochMillis(right.updatedAt)) || left.id.localeCompare(right.id)
+  );
 }
 
 /** Keep the newest `limit` items without sorting an unbounded remote array. */
-export function selectNewestByUpdatedAt<T extends { updatedAt: string; id: string }>(
+export function selectNewestByUpdatedAt<T extends { updatedAt: string | DateTime.Utc; id: string }>(
   items: readonly T[],
   limit: number,
 ): T[] {
@@ -83,298 +88,68 @@ export function selectNewestByUpdatedAt<T extends { updatedAt: string; id: strin
   return selected.sort((left, right) => compareUpdatedAt(right, left));
 }
 
-function boundModelOptions(
-  options: NonNullable<ModelSelection["options"]>,
-): NonNullable<ModelSelection["options"]> {
-  return tail(options, MAX_MODEL_OPTIONS).map((option) => ({
-    id: truncateText(option.id, MAX_FIELD_CHARS),
-    value:
-      typeof option.value === "boolean"
-        ? option.value
-        : truncateText(option.value, MAX_FIELD_CHARS),
-  }));
+const collectionLimits: Readonly<Record<string, number>> = {
+  threads: MAX_SHELL_THREADS,
+  archivedThreads: MAX_SHELL_THREADS,
+  projects: MAX_SHELL_PROJECTS,
+  messages: MAX_STORED_THREAD_MESSAGES,
+  turnItems: MAX_STORED_THREAD_MESSAGES,
+  visibleTurnItems: MAX_STORED_THREAD_MESSAGES,
+  runtimeRequests: MAX_THREAD_ACTIVITIES,
+  checkpoints: MAX_THREAD_CHECKPOINTS,
+  files: MAX_CHECKPOINT_FILES,
+  attachments: MAX_MESSAGE_ATTACHMENTS,
+  scripts: MAX_PROJECT_SCRIPTS,
+  questions: MAX_ACTIVITY_QUESTIONS,
+  options: MAX_ACTIVITY_OPTIONS,
+};
+
+// The RPC schema already strips unknown fields. Preserve DateTime values and
+// bound retained collections/text before reducers keep them between events.
+function boundProjectionValue(value: unknown, key = "", depth = 0): unknown {
+  if (DateTime.isDateTime(value)) return value;
+  if (typeof value === "string")
+    return truncateText(
+      value,
+      key === "text" || key === "markdown" ? MAX_MESSAGE_TEXT_CHARS : MAX_FIELD_CHARS,
+    );
+  if (value === null || typeof value !== "object") return value;
+  if (depth >= 16) return null;
+  if (key === "input" || key === "output" || key === "nativeMetadata") return null;
+  if (Array.isArray(value))
+    return tail(value, collectionLimits[key] ?? MAX_STORED_THREAD_MESSAGES).map((item) =>
+      boundProjectionValue(item, "", depth + 1),
+    );
+  return Object.fromEntries(
+    Object.entries(value)
+      .slice(0, 64)
+      .map(([name, item]) => [name, boundProjectionValue(item, name, depth + 1)]),
+  );
 }
 
-function boundModelSelection(selection: ModelSelection): ModelSelection {
-  return {
-    instanceId: truncateText(selection.instanceId, MAX_FIELD_CHARS) as ModelSelection["instanceId"],
-    model: truncateText(selection.model, MAX_FIELD_CHARS),
-    ...(selection.options !== undefined
-      ? { options: boundModelOptions(selection.options) }
-      : {}),
-  };
+export function boundThread(
+  thread: OrchestrationV2ThreadProjection,
+): OrchestrationV2ThreadProjection {
+  return Schema.decodeUnknownSync(OrchestrationV2ThreadProjection)(boundProjectionValue(thread));
 }
 
-function boundProjectScript(script: ProjectScript): ProjectScript {
-  return {
-    id: truncateText(script.id, MAX_FIELD_CHARS),
-    name: truncateText(script.name, MAX_FIELD_CHARS),
-    command: truncateText(script.command, MAX_FIELD_CHARS),
-    icon: script.icon,
-    runOnWorktreeCreate: script.runOnWorktreeCreate,
-    ...(script.previewUrl !== undefined
-      ? { previewUrl: truncateText(script.previewUrl, MAX_FIELD_CHARS) }
-      : {}),
-    ...(script.autoOpenPreview !== undefined ? { autoOpenPreview: script.autoOpenPreview } : {}),
-  };
+export function boundShellSnapshot(
+  snapshot: OrchestrationV2ShellSnapshot,
+): OrchestrationV2ShellSnapshot {
+  return Schema.decodeUnknownSync(OrchestrationV2ShellSnapshot)(
+    boundProjectionValue({
+      ...snapshot,
+      projects: selectNewestByUpdatedAt(snapshot.projects, MAX_SHELL_PROJECTS),
+      threads: selectNewestByUpdatedAt(snapshot.threads, MAX_SHELL_THREADS),
+      archivedThreads: selectNewestByUpdatedAt(snapshot.archivedThreads, MAX_SHELL_THREADS),
+    }),
+  );
 }
 
-function boundSession(session: OrchestrationSession): OrchestrationSession {
-  return {
-    threadId: session.threadId,
-    status: session.status,
-    providerName: boundOptionalText(session.providerName),
-    ...(session.providerInstanceId !== undefined
-      ? {
-          providerInstanceId: truncateText(session.providerInstanceId, MAX_FIELD_CHARS) as NonNullable<
-            OrchestrationSession["providerInstanceId"]
-          >,
-        }
-      : {}),
-    runtimeMode: session.runtimeMode,
-    activeTurnId: session.activeTurnId,
-    lastError: boundOptionalText(session.lastError, MAX_MESSAGE_TEXT_CHARS),
-    updatedAt: session.updatedAt,
-  };
-}
-
-function boundActivityPayload(payload: unknown): Record<string, unknown> | null {
-  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const source = payload as Record<string, unknown>;
-  const bounded: Record<string, unknown> = {};
-  if (typeof source.requestId === "string") {
-    bounded.requestId = truncateText(source.requestId, MAX_FIELD_CHARS);
-  }
-  if (typeof source.requestKind === "string") {
-    bounded.requestKind = truncateText(source.requestKind, MAX_FIELD_CHARS);
-  }
-  if (typeof source.requestType === "string") {
-    bounded.requestType = truncateText(source.requestType, MAX_FIELD_CHARS);
-  }
-  if (typeof source.detail === "string") {
-    bounded.detail = truncateText(source.detail, MAX_MESSAGE_TEXT_CHARS);
-  }
-  if (Array.isArray(source.questions)) {
-    bounded.questions = tail(source.questions, MAX_ACTIVITY_QUESTIONS).flatMap((entry) => {
-      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return [];
-      const question = entry as Record<string, unknown>;
-      if (
-        typeof question.id !== "string"
-        || typeof question.header !== "string"
-        || typeof question.question !== "string"
-        || !Array.isArray(question.options)
-      ) return [];
-      return [{
-        id: truncateText(question.id, MAX_FIELD_CHARS),
-        header: truncateText(question.header, MAX_FIELD_CHARS),
-        question: truncateText(question.question, MAX_MESSAGE_TEXT_CHARS),
-        multiSelect: question.multiSelect === true,
-        options: tail(question.options, MAX_ACTIVITY_OPTIONS).flatMap((option) => {
-          if (option === null || typeof option !== "object" || Array.isArray(option)) return [];
-          const row = option as Record<string, unknown>;
-          return typeof row.label === "string" && typeof row.description === "string"
-            ? [{
-                label: truncateText(row.label, MAX_FIELD_CHARS),
-                description: truncateText(row.description, MAX_FIELD_CHARS),
-              }]
-            : [];
-        }),
-      }];
-    });
-  }
-  return Object.keys(bounded).length > 0 ? bounded : null;
-}
-
-function boundMessage(message: OrchestrationMessage): OrchestrationMessage {
-  return {
-    id: message.id,
-    role: message.role,
-    text: truncateText(message.text, MAX_MESSAGE_TEXT_CHARS),
-    ...(message.attachments !== undefined
-      ? {
-          attachments: tail(message.attachments, MAX_MESSAGE_ATTACHMENTS).map((attachment) => ({
-            type: attachment.type,
-            id: truncateText(attachment.id, MAX_FIELD_CHARS),
-            name: truncateText(attachment.name, MAX_FIELD_CHARS),
-            mimeType: truncateText(attachment.mimeType, MAX_FIELD_CHARS),
-            sizeBytes: attachment.sizeBytes,
-          })),
-        }
-      : {}),
-    turnId: message.turnId,
-    streaming: message.streaming,
-    createdAt: message.createdAt,
-    updatedAt: message.updatedAt,
-  };
-}
-
-function boundCheckpoint(checkpoint: OrchestrationCheckpointSummary): OrchestrationCheckpointSummary {
-  return {
-    turnId: checkpoint.turnId,
-    checkpointTurnCount: checkpoint.checkpointTurnCount,
-    checkpointRef: checkpoint.checkpointRef,
-    status: checkpoint.status,
-    files: tail(checkpoint.files, MAX_CHECKPOINT_FILES).map((file) => ({
-      path: truncateText(file.path, MAX_FIELD_CHARS),
-      kind: truncateText(file.kind, MAX_FIELD_CHARS),
-      additions: file.additions,
-      deletions: file.deletions,
-    })),
-    assistantMessageId: checkpoint.assistantMessageId,
-    completedAt: checkpoint.completedAt,
-  };
-}
-
-function boundActivity(activity: OrchestrationThreadActivity): OrchestrationThreadActivity {
-  return {
-    id: activity.id,
-    tone: activity.tone,
-    kind: truncateText(activity.kind, MAX_FIELD_CHARS),
-    summary: truncateText(activity.summary, MAX_FIELD_CHARS),
-    payload: boundActivityPayload(activity.payload),
-    turnId: activity.turnId,
-    ...(activity.sequence !== undefined ? { sequence: activity.sequence } : {}),
-    createdAt: activity.createdAt,
-  };
-}
-
-function boundThreadShell(thread: OrchestrationThreadShell): OrchestrationThreadShell {
-  return {
-    id: thread.id,
-    projectId: thread.projectId,
-    title: truncateText(thread.title, MAX_FIELD_CHARS),
-    modelSelection: boundModelSelection(thread.modelSelection),
-    runtimeMode: thread.runtimeMode,
-    interactionMode: thread.interactionMode,
-    branch: boundOptionalText(thread.branch),
-    worktreePath: boundOptionalText(thread.worktreePath),
-    latestTurn: thread.latestTurn,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    archivedAt: thread.archivedAt,
-    settledOverride: thread.settledOverride,
-    settledAt: thread.settledAt,
-    snoozedUntil: thread.snoozedUntil,
-    snoozedAt: thread.snoozedAt,
-    pinnedAt: thread.pinnedAt,
-    pinOrderKey: boundOptionalText(thread.pinOrderKey),
-    titleRegeneration: thread.titleRegeneration,
-    session: thread.session ? boundSession(thread.session) : thread.session,
-    latestUserMessageAt: thread.latestUserMessageAt,
-    hasPendingApprovals: thread.hasPendingApprovals,
-    hasPendingUserInput: thread.hasPendingUserInput,
-    hasActionableProposedPlan: thread.hasActionableProposedPlan,
-    backgroundLiveness: thread.backgroundLiveness,
-    planProgress: thread.planProgress
-      ? {
-          ...thread.planProgress,
-          step: truncateText(thread.planProgress.step, MAX_FIELD_CHARS),
-        }
-      : thread.planProgress,
-  };
-}
-
-function boundRepositoryIdentity(
-  identity: Exclude<OrchestrationProjectShell["repositoryIdentity"], undefined>,
-): Exclude<OrchestrationProjectShell["repositoryIdentity"], undefined> {
-  if (identity === null) return null;
-  return {
-    canonicalKey: truncateText(identity.canonicalKey, MAX_FIELD_CHARS),
-    locator: {
-      source: identity.locator.source,
-      remoteName: truncateText(identity.locator.remoteName, MAX_FIELD_CHARS),
-      remoteUrl: truncateText(identity.locator.remoteUrl, MAX_FIELD_CHARS),
-    },
-    ...(identity.rootPath != null
-      ? { rootPath: truncateText(identity.rootPath, MAX_FIELD_CHARS) }
-      : {}),
-    ...(identity.displayName != null
-      ? { displayName: truncateText(identity.displayName, MAX_FIELD_CHARS) }
-      : {}),
-    ...(identity.provider != null
-      ? { provider: truncateText(identity.provider, MAX_FIELD_CHARS) }
-      : {}),
-    ...(identity.owner != null ? { owner: truncateText(identity.owner, MAX_FIELD_CHARS) } : {}),
-    ...(identity.name != null ? { name: truncateText(identity.name, MAX_FIELD_CHARS) } : {}),
-  };
-}
-
-function boundProjectShell(project: OrchestrationProjectShell): OrchestrationProjectShell {
-  return {
-    id: project.id,
-    title: truncateText(project.title, MAX_FIELD_CHARS),
-    workspaceRoot: truncateText(project.workspaceRoot, MAX_FIELD_CHARS),
-    ...(project.repositoryIdentity !== undefined
-      ? { repositoryIdentity: boundRepositoryIdentity(project.repositoryIdentity) }
-      : {}),
-    defaultModelSelection: project.defaultModelSelection
-      ? boundModelSelection(project.defaultModelSelection)
-      : project.defaultModelSelection,
-    defaultThreadEnvMode: project.defaultThreadEnvMode,
-    faviconPath: boundOptionalText(project.faviconPath),
-    scripts: tail(project.scripts, MAX_PROJECT_SCRIPTS).map(boundProjectScript),
-    createdAt: project.createdAt,
-    updatedAt: project.updatedAt,
-  };
-}
-
-export function boundThread(thread: OrchestrationThread): OrchestrationThread {
-  return {
-    id: thread.id,
-    projectId: thread.projectId,
-    title: truncateText(thread.title, MAX_FIELD_CHARS),
-    modelSelection: boundModelSelection(thread.modelSelection),
-    runtimeMode: thread.runtimeMode,
-    interactionMode: thread.interactionMode,
-    branch: boundOptionalText(thread.branch),
-    worktreePath: boundOptionalText(thread.worktreePath),
-    latestTurn: thread.latestTurn,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    archivedAt: thread.archivedAt,
-    settledOverride: thread.settledOverride,
-    settledAt: thread.settledAt,
-    snoozedUntil: thread.snoozedUntil,
-    snoozedAt: thread.snoozedAt,
-    pinnedAt: thread.pinnedAt,
-    pinOrderKey: boundOptionalText(thread.pinOrderKey),
-    titleRegeneration: thread.titleRegeneration,
-    deletedAt: thread.deletedAt,
-    messages: tail(thread.messages, MAX_STORED_THREAD_MESSAGES).map(boundMessage),
-    proposedPlans: tail(thread.proposedPlans ?? [], 32).map((plan) => ({
-      id: plan.id,
-      turnId: plan.turnId,
-      planMarkdown: truncateText(plan.planMarkdown, MAX_MESSAGE_TEXT_CHARS),
-      implementedAt: plan.implementedAt,
-      implementationThreadId: plan.implementationThreadId,
-      createdAt: plan.createdAt,
-      updatedAt: plan.updatedAt,
-    })),
-    activities: tail(thread.activities, MAX_THREAD_ACTIVITIES).map(boundActivity),
-    checkpoints: tail(thread.checkpoints, MAX_THREAD_CHECKPOINTS).map(boundCheckpoint),
-    session: thread.session ? boundSession(thread.session) : thread.session,
-  };
-}
-
-export function boundShellSnapshot(snapshot: OrchestrationShellSnapshot): OrchestrationShellSnapshot {
-  return {
-    snapshotSequence: snapshot.snapshotSequence,
-    updatedAt: snapshot.updatedAt,
-    projects: selectNewestByUpdatedAt(snapshot.projects, MAX_SHELL_PROJECTS).map(boundProjectShell),
-    threads: selectNewestByUpdatedAt(snapshot.threads, MAX_SHELL_THREADS).map(boundThreadShell),
-  };
-}
-
-export function boundShellStreamItem(item: OrchestrationShellStreamItem): OrchestrationShellStreamItem {
-  if (item.kind === "snapshot") {
-    return { kind: "snapshot", snapshot: boundShellSnapshot(item.snapshot) };
-  }
-  if (item.kind === "thread-upserted") {
-    return { ...item, thread: boundThreadShell(item.thread) };
-  }
-  if (item.kind === "project-upserted") {
-    return { ...item, project: boundProjectShell(item.project) };
-  }
+export function boundShellStreamItem(
+  item: OrchestrationV2ShellStreamItem,
+): OrchestrationV2ShellStreamItem {
+  if (item.kind === "snapshot") return { ...item, snapshot: boundShellSnapshot(item.snapshot) };
   return item;
 }
 
@@ -413,6 +188,14 @@ export function boundThreadDto(thread: ThreadDto): ThreadDto {
     branch: boundOptionalText(thread.branch),
     environmentLabel: truncateText(thread.environmentLabel, MAX_FIELD_CHARS),
     sessionError: boundOptionalText(thread.sessionError, MAX_MESSAGE_TEXT_CHARS),
+    queue: {
+      ...thread.queue,
+      messages: thread.queue.messages.slice(0, MAX_IPC_QUEUE_MESSAGES).map((message) => ({
+        ...message,
+        text: truncateText(message.text, MAX_IPC_MESSAGE_TEXT_CHARS),
+        editable: message.editable && message.text.length <= MAX_IPC_MESSAGE_TEXT_CHARS,
+      })),
+    },
     messages: tail(thread.messages, MAX_IPC_THREAD_MESSAGES).map((message) => ({
       ...message,
       text: truncateText(message.text, MAX_IPC_MESSAGE_TEXT_CHARS),

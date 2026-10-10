@@ -31,7 +31,7 @@ Item {
     Text {
       width: parent.width
       text: root.service && root.service.authPhase === "signingIn"
-        ? "Complete sign-in in your browser with your T3 Connect email and password."
+        ? "Complete sign-in in your browser with your T3 Connect account."
         : "Monitor, manage and steer T3 Command Center without opening the full application."
       color: Qt.darker(Color.foreground, 1.45)
       font.family: Style.font.family

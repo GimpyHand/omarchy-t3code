@@ -13,9 +13,14 @@ const REQUEST_TYPES = new Set<RequestType>([
   "attachment.discard",
   "thread.open",
   "thread.close",
+  "thread.history.load",
+  "thread.history.latest",
   "thread.create",
   "thread.send",
   "thread.interrupt",
+  "thread.queue.resume",
+  "thread.queue.cancel",
+  "thread.queue.edit",
   "thread.settle",
   "thread.unsettle",
   "thread.snooze",
@@ -125,7 +130,10 @@ function validatePayload(type: RequestType, payload: Record<string, unknown>): v
       requireEnvironmentId(payload);
       return;
     case "thread.open":
+    case "thread.history.load":
+    case "thread.history.latest":
     case "thread.interrupt":
+    case "thread.queue.resume":
     case "thread.settle":
     case "thread.unsettle":
     case "thread.unsnooze":
@@ -133,6 +141,15 @@ function validatePayload(type: RequestType, payload: Record<string, unknown>): v
     case "thread.unpin":
       requireEnvironmentId(payload);
       requiredString(payload, "threadId", 256);
+      return;
+    case "thread.queue.cancel":
+    case "thread.queue.edit":
+      requireEnvironmentId(payload);
+      requiredString(payload, "threadId", 256);
+      requiredString(payload, "runId", 256);
+      if (type === "thread.queue.edit") {
+        requiredString(payload, "text", 120_000);
+      }
       return;
     case "thread.snooze":
       requireEnvironmentId(payload);

@@ -25,11 +25,10 @@ async function uncompressedSha256(path) {
   return hash.digest("hex");
 }
 
-const [metadata, bridgeMetadata, manifest, lock] = await Promise.all([
+const [metadata, bridgeMetadata, manifest] = await Promise.all([
   json("package.json"),
   json("bridge/package.json"),
   json("manifest.json"),
-  json("t3-upstream.lock.json"),
 ]);
 
 if (metadata.version !== bridgeMetadata.version || metadata.version !== manifest.version) {
@@ -42,8 +41,13 @@ if (metadata.repository?.url !== `git+${repositoryUrl}.git`) {
   fail("package.json repository metadata is not the publication repository.");
 }
 
-const manifestPaths = execFileSync("git", ["ls-files", "--", "*manifest.json"], { cwd: root, encoding: "utf8" })
-  .trim().split("\n").filter(Boolean);
+const manifestPaths = execFileSync("git", ["ls-files", "--", "*manifest.json"], {
+  cwd: root,
+  encoding: "utf8",
+})
+  .trim()
+  .split("\n")
+  .filter(Boolean);
 if (manifestPaths.length !== 1 || manifestPaths[0] !== "manifest.json") {
   fail("marketplace publication requires exactly one manifest.json at the repository root.");
 }
@@ -51,29 +55,17 @@ const symlinks = execFileSync("git", ["ls-files", "-s"], { cwd: root, encoding: 
   .split("\n")
   .filter((line) => line.startsWith("120000 "));
 if (symlinks.length > 0) fail("tracked symlinks are not allowed in an Omarchy plugin repository.");
-if (!/^[0-9a-f]{40}$/u.test(lock.commit) || !/^v\d+\.\d+\.\d+-nightly\.\d{8}\.\d+$/u.test(lock.tag)) {
-  fail("t3-upstream.lock.json does not contain an exact Nightly tag and commit.");
+try {
+  await access(join(root, "upstream", "t3code", ".git"));
+} catch {
+  fail("Run pnpm sync:t3 to initialize T3 source.");
 }
-
-const submoduleCommit = execFileSync(
+const sourceCommit = execFileSync(
   "git",
   ["-C", join(root, "upstream", "t3code"), "rev-parse", "HEAD"],
   { encoding: "utf8" },
 ).trim();
-if (submoduleCommit !== lock.commit) {
-  fail(`the T3 submodule is ${submoduleCommit}, but the lock requires ${lock.commit}.`);
-}
-
-const documentation = ["UPSTREAM.md", "docs/ACCEPTANCE.md"];
-for (const path of documentation) {
-  const contents = await readFile(join(root, path), "utf8");
-  if (!contents.includes(lock.commit)) fail(`${path} does not identify the supported T3 commit.`);
-  if (path !== "docs/ACCEPTANCE.md" && !contents.includes(lock.tag)) {
-    fail(`${path} does not identify the supported T3 tag.`);
-  }
-  if (contents.includes("<repository-url>")) fail(`${path} still contains a repository placeholder.`);
-}
-
+if (!/^[0-9a-f]{40}$/u.test(sourceCommit)) fail("Run pnpm sync:t3 to initialize T3 source.");
 const readme = await readFile(join(root, "README.md"), "utf8");
 if (!readme.includes(repositoryUrl)) fail("README.md does not link to the publication repository.");
 if (!readme.includes(`omarchy plugin add ${repositoryUrl}.git --enable`)) {
@@ -94,7 +86,11 @@ await access(join(root, "lib", "t3-mini-bridge-linux-x64.gz"));
 await access(join(root, "lib", "t3-mini-bridge-linux-x64.sha256"));
 
 const preview = await readFile(join(root, "preview.png"));
-if (preview.byteLength < 24 || preview.byteLength > 50 * 1024 * 1024 || preview.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
+if (
+  preview.byteLength < 24 ||
+  preview.byteLength > 50 * 1024 * 1024 ||
+  preview.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a"
+) {
   fail("preview.png must be a valid PNG no larger than 50 MB.");
 }
 const previewWidth = preview.readUInt32BE(16);
@@ -106,37 +102,53 @@ const archive = await stat(join(root, "lib", "t3-mini-bridge-linux-x64.gz"));
 if (archive.size < 1 || archive.size >= 100 * 1024 * 1024) {
   fail("the bundled marketplace runtime must fit GitHub's per-file limit.");
 }
-const checksumContents = await readFile(join(root, "lib", "t3-mini-bridge-linux-x64.sha256"), "utf8");
+const checksumContents = await readFile(
+  join(root, "lib", "t3-mini-bridge-linux-x64.sha256"),
+  "utf8",
+);
 const checksumMatch = checksumContents.match(/^([0-9a-f]{64})  t3-mini-bridge\n$/u);
 if (
-  !checksumMatch
-  || checksumMatch[1] !== await uncompressedSha256(join(root, "lib", "t3-mini-bridge-linux-x64.gz"))
+  !checksumMatch ||
+  checksumMatch[1] !== (await uncompressedSha256(join(root, "lib", "t3-mini-bridge-linux-x64.gz")))
 ) {
   fail("the marketplace runtime archive does not match its uncompressed checksum.");
 }
 const bundledLicenses = await json("licenses/BUNDLED-LICENSES.json");
-const marketplaceNodeVersion = (await readFile(join(root, ".node-version"), "utf8")).trim();
-const bundledNodeVersion = String(bundledLicenses.node?.version ?? "").match(/^v(\d+)\.(\d+)\.(\d+)$/u)?.slice(1).map(Number);
+const buildRecord = await json("lib/runtime-build.json");
+const bundledNodeVersion = String(bundledLicenses.node?.version ?? "")
+  .match(/^v(\d+)\.(\d+)\.(\d+)$/u)
+  ?.slice(1)
+  .map(Number);
 if (
-  !bundledNodeVersion
-  || bundledNodeVersion[0] < 24
-  || (bundledNodeVersion[0] === 24 && (bundledNodeVersion[1] < 13 || (bundledNodeVersion[1] === 13 && bundledNodeVersion[2] < 1)))
-  || !Array.isArray(bundledLicenses.packages)
-  || bundledLicenses.packages.length === 0
+  !bundledNodeVersion ||
+  bundledNodeVersion[0] < 26 ||
+  !Array.isArray(bundledLicenses.packages) ||
+  bundledLicenses.packages.length === 0
 ) {
   fail("the marketplace runtime license inventory is incomplete.");
 }
-if (bundledLicenses.node.version !== `v${marketplaceNodeVersion}`) {
-  fail("the marketplace runtime license inventory must match the pinned Node builder.");
+if (
+  !/^[0-9a-f]{40}$/u.test(buildRecord.commit) ||
+  buildRecord.nodeVersion !== bundledLicenses.node.version ||
+  typeof buildRecord.clerkJsVersion !== "string" ||
+  !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(buildRecord.clerkJsVersion) ||
+  typeof buildRecord.electronSdkVersion !== "string" ||
+  !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(buildRecord.electronSdkVersion)
+) {
+  fail(
+    "the marketplace build record must identify its T3 source, SDKs, and licensed Node builder.",
+  );
 }
-if (metadata.scripts?.["verify:marketplace-runtime"] !== "node scripts/verify-marketplace-runtime.mjs") {
+if (
+  metadata.scripts?.["verify:marketplace-runtime"] !== "node scripts/verify-marketplace-runtime.mjs"
+) {
   fail("package.json must expose the marketplace payload provenance verifier.");
 }
-if (await readFile(join(root, "LICENSE"), "utf8") !== await readFile(join(root, "licenses", "OMARCHY-T3CODE-LICENSE"), "utf8")) {
+if (
+  (await readFile(join(root, "LICENSE"), "utf8")) !==
+  (await readFile(join(root, "licenses", "OMARCHY-T3CODE-LICENSE"), "utf8"))
+) {
   fail("the marketplace runtime does not contain the current project license.");
-}
-if (await readFile(join(root, "upstream", "t3code", "LICENSE"), "utf8") !== await readFile(join(root, "licenses", "T3-CODE-LICENSE"), "utf8")) {
-  fail("the marketplace runtime does not contain the pinned T3 license.");
 }
 for (const executable of [
   join(root, "bin", "t3-mini-bridge"),
@@ -147,5 +159,5 @@ for (const executable of [
 }
 
 process.stdout.write(
-  `Validated ${manifest.id} ${metadata.version} at T3 ${lock.tag} (${lock.commit}).\n`,
+  `Validated ${manifest.id} ${metadata.version} at T3 main (${sourceCommit}).\n`,
 );

@@ -7,18 +7,17 @@ client open so cross-client state can be observed.
 ## Preflight
 
 ```bash
-git submodule update --init upstream/t3code
-pnpm install --frozen-lockfile
+pnpm sync:t3
+pnpm install
 pnpm check
 pnpm package
-pnpm verify:marketplace-runtime
+pnpm bundle:marketplace
 dist/plugin/lib/t3-mini-bridge --self-test
-scripts/check-t3-nightly
 pnpm deploy:plugin
 ```
 
 Expected self-test output contains the current plugin version, protocol version
-1, and commit `2c4158f87a1b6a586d0aa5e0338f122cb7887c4f`.
+1, and the commit printed by `git -C upstream/t3code rev-parse HEAD`.
 
 Confirm the widget is enabled:
 
@@ -57,6 +56,10 @@ Do not mark a release fully interoperable until all of the following pass:
 3. Open an existing thread. Messages load without raw tool activity. Expand a
    changed-files card to inspect its directory tree, then start work in the
    official client and observe incremental assistant output here.
+   Open a long thread and use **Load older messages**. Confirm older messages
+   appear once, the visible message stays in place, and failures can be retried.
+   Keep paging past the first window, then use **Jump to latest** and confirm
+   live replies, approvals, and queued messages still match the official client.
 4. Send a follow-up in the mini client and observe the user message plus
    streamed response in both clients.
 5. Copy a screenshot, press **Ctrl+V** in the thread composer, confirm its
@@ -67,6 +70,10 @@ Do not mark a release fully interoperable until all of the following pass:
    appears in the official client.
 7. While work is running, press **Stop** and confirm the turn is interrupted in
    both clients.
+   Queue a follow-up before stopping. Confirm the queue shows as paused, edit
+   its text without losing attachments, then resume it. Cancel another queued
+   message and confirm both clients agree. Steering messages have a distinct
+   label from messages that are still queued.
 8. Trigger a command/file approval; approve or decline it here and confirm the
    provider resumes or rejects correctly.
 9. Trigger a user-input question; answer it here and confirm the answer reaches

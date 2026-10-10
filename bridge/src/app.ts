@@ -51,7 +51,10 @@ export class BridgeApp implements NdjsonHandler {
     coordinator = new ConnectionCoordinator(
       this.auth,
       relay,
-      (hooks) => new T3EnvironmentSession(hooks),
+      (hooks) => new T3EnvironmentSession(
+        hooks,
+        (prepared, threadId, cursor) => relay.loadThreadHistory(prepared, threadId, cursor),
+      ),
       {
         onThread: (thread) => this.emit("thread.snapshot", thread),
         onMessageDelta: (payload) => this.emit("message.delta", payload),

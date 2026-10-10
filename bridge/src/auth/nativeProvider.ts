@@ -1,3 +1,4 @@
+import { upstreamBuild } from "../t3/upstreamBuild.ts";
 import type { AuthStatusDto } from "../protocol/types.ts";
 import { BridgeError } from "../security/redact.ts";
 import type { SecretStore } from "../security/secretStore.ts";
@@ -24,11 +25,10 @@ export const DEFAULT_NATIVE_CLERK_CONFIG: Readonly<NativeClerkConfig> = Object.f
   clerkUrl: "https://clerk.t3.codes",
   jwtTemplate: "t3-relay",
   desktopRedirectUrl: "t3code://app/",
-  // These match the Clerk versions pinned by T3 Nightly at the compatibility
-  // revision. They are public request metadata, not credentials.
+  // Public request metadata follows the source used for this build.
   clerkApiVersion: "2026-05-12",
-  clerkJsVersion: "6.29.2",
-  electronSdkVersion: "0.0.34",
+  clerkJsVersion: upstreamBuild.clerkJsVersion,
+  electronSdkVersion: upstreamBuild.electronSdkVersion,
 });
 
 interface NativeClerkProviderOptions {
@@ -65,9 +65,13 @@ class ClerkRequestError extends BridgeError {
 
 function validateOrigin(raw: string): string {
   const url = new URL(raw);
-  const loopback = url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
+  const loopback =
+    url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
   if ((url.protocol !== "https:" && !loopback) || url.username || url.password) {
-    throw new BridgeError("AUTH_CONFIG_INVALID", "The T3 Connect Clerk URL must be a secure origin.");
+    throw new BridgeError(
+      "AUTH_CONFIG_INVALID",
+      "The T3 Connect Clerk URL must be a secure origin.",
+    );
   }
   return url.origin;
 }
@@ -94,9 +98,14 @@ function authorizationToken(response: Response, fallback: string): string {
 function activeSession(client: Record<string, unknown>): ActiveSession | null {
   const sessions = Array.isArray(client.sessions) ? client.sessions : [];
   const active = sessions.filter(
-    (entry): entry is Record<string, unknown> => entry !== null && typeof entry === "object" && entry.status === "active" && typeof entry.id === "string",
+    (entry): entry is Record<string, unknown> =>
+      entry !== null &&
+      typeof entry === "object" &&
+      entry.status === "active" &&
+      typeof entry.id === "string",
   );
-  const preferredId = typeof client.last_active_session_id === "string" ? client.last_active_session_id : "";
+  const preferredId =
+    typeof client.last_active_session_id === "string" ? client.last_active_session_id : "";
   const selected = active.find((entry) => entry.id === preferredId) ?? active[0];
   return selected && typeof selected.id === "string" ? { id: selected.id, value: selected } : null;
 }
@@ -107,15 +116,23 @@ function sessionIdentity(session: Record<string, unknown>): string | null {
   const value = user as Record<string, unknown>;
   const addresses = Array.isArray(value.email_addresses)
     ? value.email_addresses.filter(
-      (entry): entry is Record<string, unknown> => entry !== null && typeof entry === "object" && !Array.isArray(entry),
-    )
+        (entry): entry is Record<string, unknown> =>
+          entry !== null && typeof entry === "object" && !Array.isArray(entry),
+      )
     : [];
-  const primaryId = typeof value.primary_email_address_id === "string" ? value.primary_email_address_id : "";
+  const primaryId =
+    typeof value.primary_email_address_id === "string" ? value.primary_email_address_id : "";
   const primary = addresses.find((entry) => entry.id === primaryId) ?? addresses[0];
-  if (primary && typeof primary.email_address === "string" && primary.email_address.trim().length > 0) {
+  if (
+    primary &&
+    typeof primary.email_address === "string" &&
+    primary.email_address.trim().length > 0
+  ) {
     return primary.email_address.trim();
   }
-  return typeof value.username === "string" && value.username.trim().length > 0 ? value.username.trim() : null;
+  return typeof value.username === "string" && value.username.trim().length > 0
+    ? value.username.trim()
+    : null;
 }
 
 function signInRecord(result: ClerkResult): Record<string, unknown> | null {
@@ -156,19 +173,22 @@ export type PasswordSignInResult =
 
 function parseSignInFactor(entry: unknown): Record<string, unknown> | null {
   return entry !== null && typeof entry === "object" && !Array.isArray(entry)
-    ? entry as Record<string, unknown>
+    ? (entry as Record<string, unknown>)
     : null;
 }
 
 function pickSecondFactor(signIn: Record<string, unknown>): PendingSecondFactor | null {
   const id = signIn.id;
   if (typeof id !== "string" || id.length === 0) return null;
-  const factors = Array.isArray(signIn.supported_second_factors) ? signIn.supported_second_factors : [];
+  const factors = Array.isArray(signIn.supported_second_factors)
+    ? signIn.supported_second_factors
+    : [];
   for (const strategy of ["email_code", "totp", "phone_code"] as const) {
     const match = factors.map(parseSignInFactor).find((entry) => entry?.strategy === strategy);
     if (match === null || match === undefined) continue;
     if (strategy === "email_code") {
-      const emailAddressId = typeof match.email_address_id === "string" ? match.email_address_id : "";
+      const emailAddressId =
+        typeof match.email_address_id === "string" ? match.email_address_id : "";
       if (emailAddressId.length === 0) continue;
       return {
         signInId: id,
@@ -213,7 +233,10 @@ function jwtExpiryEpochMs(token: string): number {
   try {
     const encoded = token.split(".")[1];
     if (!encoded) return Date.now() + 30_000;
-    const claims = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Record<string, unknown>;
+    const claims = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
     return typeof claims.exp === "number" && Number.isFinite(claims.exp)
       ? claims.exp * 1_000
       : Date.now() + 30_000;
@@ -276,7 +299,8 @@ export class NativeClerkProvider implements AuthProvider {
     url.searchParams.set("_electron_sdk_version", this.config.electronSdkVersion);
     const headers: Record<string, string> = { ...(init.headers ?? {}) };
     if (clientToken.length > 0) headers.authorization = `Bearer ${clientToken}`;
-    if (init.body !== undefined && headers["content-type"] === undefined) headers["content-type"] = "application/json";
+    if (init.body !== undefined && headers["content-type"] === undefined)
+      headers["content-type"] = "application/json";
 
     let response: Response;
     try {
@@ -296,26 +320,45 @@ export class NativeClerkProvider implements AuthProvider {
         const body = parseJsonObject(text);
         const errors = Array.isArray(body.errors) ? body.errors : [];
         const first = errors.find(
-          (entry): entry is Record<string, unknown> => entry !== null && typeof entry === "object" && !Array.isArray(entry),
+          (entry): entry is Record<string, unknown> =>
+            entry !== null && typeof entry === "object" && !Array.isArray(entry),
         );
         if (first) {
           const code = typeof first.code === "string" ? first.code : "";
-          const clerkMessage = typeof first.long_message === "string" && first.long_message.trim().length > 0
-            ? first.long_message.trim()
-            : typeof first.message === "string" && first.message.trim().length > 0
-              ? first.message.trim()
-              : null;
+          const clerkMessage =
+            typeof first.long_message === "string" && first.long_message.trim().length > 0
+              ? first.long_message.trim()
+              : typeof first.message === "string" && first.message.trim().length > 0
+                ? first.message.trim()
+                : null;
           if (code === "form_password_incorrect") {
-            throw new BridgeError("AUTH_PASSWORD_INVALID", "That email and password combination is incorrect.", false);
+            throw new BridgeError(
+              "AUTH_PASSWORD_INVALID",
+              "That email and password combination is incorrect.",
+              false,
+            );
           }
           if (code === "form_identifier_not_found") {
-            throw new BridgeError("AUTH_IDENTIFIER_NOT_FOUND", "No T3 Connect account matches that email.", false);
+            throw new BridgeError(
+              "AUTH_IDENTIFIER_NOT_FOUND",
+              "No T3 Connect account matches that email.",
+              false,
+            );
           }
           if (code === "form_code_incorrect") {
-            throw new BridgeError("AUTH_CODE_INVALID", "That verification code is incorrect.", false);
+            throw new BridgeError(
+              "AUTH_CODE_INVALID",
+              "That verification code is incorrect.",
+              false,
+            );
           }
           if (clerkMessage !== null) {
-            throw new ClerkRequestError("AUTH_REQUEST_REJECTED", clerkMessage, response.status, response.status >= 500);
+            throw new ClerkRequestError(
+              "AUTH_REQUEST_REJECTED",
+              clerkMessage,
+              response.status,
+              response.status >= 500,
+            );
           }
         }
       } catch (error) {
@@ -330,39 +373,56 @@ export class NativeClerkProvider implements AuthProvider {
     }
     const body = parseJsonObject(text);
     const responseValue = body.response;
-    const data = responseValue !== null && typeof responseValue === "object" && !Array.isArray(responseValue)
-      ? responseValue as Record<string, unknown>
-      : body;
+    const data =
+      responseValue !== null && typeof responseValue === "object" && !Array.isArray(responseValue)
+        ? (responseValue as Record<string, unknown>)
+        : body;
     const clientValue = body.client;
-    const client = clientValue !== null && typeof clientValue === "object" && !Array.isArray(clientValue)
-      ? clientValue as Record<string, unknown>
-      : null;
+    const client =
+      clientValue !== null && typeof clientValue === "object" && !Array.isArray(clientValue)
+        ? (clientValue as Record<string, unknown>)
+        : null;
     return { data, client, clientToken: authorizationToken(response, clientToken) };
   }
 
   private async rememberClientToken(token: string): Promise<string> {
     if (token.length === 0) {
-      throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no native session credential.");
+      throw new BridgeError(
+        "AUTH_RESPONSE_INVALID",
+        "T3 Connect returned no native session credential.",
+      );
     }
     await this.options.store.set(CLERK_CLIENT_SECRET_KEY, token);
     return token;
   }
 
   private async initializeClient(): Promise<ClerkResult> {
-    const result = await this.clerkRequest("/v1/client", "", { method: "GET" }, "T3 Connect session setup");
+    const result = await this.clerkRequest(
+      "/v1/client",
+      "",
+      { method: "GET" },
+      "T3 Connect session setup",
+    );
     await this.rememberClientToken(result.clientToken);
     return result;
   }
 
   private async currentClient(createWhenMissing: boolean): Promise<ClerkResult | null> {
     const stored = await this.options.store.get(CLERK_CLIENT_SECRET_KEY);
-    if (stored === null || stored.length === 0) return createWhenMissing ? this.initializeClient() : null;
+    if (stored === null || stored.length === 0)
+      return createWhenMissing ? this.initializeClient() : null;
     try {
-      const result = await this.clerkRequest("/v1/client", stored, { method: "GET" }, "T3 Connect sign-in check");
+      const result = await this.clerkRequest(
+        "/v1/client",
+        stored,
+        { method: "GET" },
+        "T3 Connect sign-in check",
+      );
       await this.rememberClientToken(result.clientToken);
       return result;
     } catch (error) {
-      if (!(error instanceof ClerkRequestError) || (error.status !== 401 && error.status !== 403)) throw error;
+      if (!(error instanceof ClerkRequestError) || (error.status !== 401 && error.status !== 403))
+        throw error;
       await this.options.store.remove(CLERK_CLIENT_SECRET_KEY).catch(() => undefined);
       return createWhenMissing ? this.initializeClient() : null;
     }
@@ -377,12 +437,20 @@ export class NativeClerkProvider implements AuthProvider {
           phase: "signedOut",
           identity: null,
           remoteAccess: "unknown",
-          detail: legacy === null ? null : "Sign in once more to upgrade this client to T3 Connect Relay authentication.",
+          detail:
+            legacy === null
+              ? null
+              : "Sign in once more to upgrade this client to T3 Connect Relay authentication.",
         });
       }
       const session = activeSession(client.data);
       if (session === null) {
-        return this.publish({ phase: "signedOut", identity: null, remoteAccess: "unknown", detail: null });
+        return this.publish({
+          phase: "signedOut",
+          identity: null,
+          remoteAccess: "unknown",
+          detail: null,
+        });
       }
       return this.publish(this.signedInStatus(session));
     } catch (error) {
@@ -396,7 +464,12 @@ export class NativeClerkProvider implements AuthProvider {
   }
 
   private async ensureSignedInClient(token: string): Promise<string> {
-    let result = await this.clerkRequest("/v1/client", token, { method: "GET" }, "T3 Connect sign-in check");
+    let result = await this.clerkRequest(
+      "/v1/client",
+      token,
+      { method: "GET" },
+      "T3 Connect sign-in check",
+    );
     let nextToken = await this.rememberClientToken(result.clientToken);
     const client = resolveClientRecord(result);
     if (client === null || activeSession(client) === null) {
@@ -441,10 +514,12 @@ export class NativeClerkProvider implements AuthProvider {
     );
     token = await this.rememberClientToken(result.clientToken);
 
-    const startedSignInId = signInId(result) ?? (() => {
-      const client = resolveClientRecord(result);
-      return client === null ? null : pendingSignInId(client);
-    })();
+    const startedSignInId =
+      signInId(result) ??
+      (() => {
+        const client = resolveClientRecord(result);
+        return client === null ? null : pendingSignInId(client);
+      })();
     if (startedSignInId === null) {
       throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no sign-in request.");
     }
@@ -490,7 +565,10 @@ export class NativeClerkProvider implements AuthProvider {
   async submitSecondFactorSignIn(clientToken: string, code: string): Promise<string> {
     const pending = this.pendingSecondFactor;
     if (pending === null) {
-      throw new BridgeError("AUTH_SECOND_FACTOR_PENDING", "No verification step is waiting. Start sign-in again from the Omarchy panel.");
+      throw new BridgeError(
+        "AUTH_SECOND_FACTOR_PENDING",
+        "No verification step is waiting. Start sign-in again from the Omarchy panel.",
+      );
     }
     const trimmed = code.trim();
     if (trimmed.length === 0) {
@@ -522,12 +600,15 @@ export class NativeClerkProvider implements AuthProvider {
     let restoreHandler: (() => Promise<void>) | null = null;
     try {
       const initial = await this.currentClient(true);
-      if (initial === null) throw new BridgeError("AUTH_START_FAILED", "Could not initialize T3 Connect sign-in.");
+      if (initial === null)
+        throw new BridgeError("AUTH_START_FAILED", "Could not initialize T3 Connect sign-in.");
       let clientToken = initial.clientToken;
       let oauthSignInId = "";
       callback = await startNativeCallbackServer({
         store: this.options.store,
-        ...(this.options.callbackTimeoutMs !== undefined ? { timeoutMs: this.options.callbackTimeoutMs } : {}),
+        ...(this.options.callbackTimeoutMs !== undefined
+          ? { timeoutMs: this.options.callbackTimeoutMs }
+          : {}),
         signInWithPassword: async (identifier, password) => {
           const step = await this.submitPasswordSignIn(clientToken, identifier, password);
           clientToken = step.token;
@@ -553,15 +634,29 @@ export class NativeClerkProvider implements AuthProvider {
           );
           clientToken = await this.rememberClientToken(started.clientToken);
           if (typeof started.data.id !== "string" || started.data.id.length === 0) {
-            throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no sign-in request.");
+            throw new BridgeError(
+              "AUTH_RESPONSE_INVALID",
+              "T3 Connect returned no sign-in request.",
+            );
           }
           const verification = started.data.first_factor_verification;
-          if (verification === null || typeof verification !== "object" || Array.isArray(verification)) {
-            throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no browser verification.");
+          if (
+            verification === null ||
+            typeof verification !== "object" ||
+            Array.isArray(verification)
+          ) {
+            throw new BridgeError(
+              "AUTH_RESPONSE_INVALID",
+              "T3 Connect returned no browser verification.",
+            );
           }
-          const verificationUrl = (verification as Record<string, unknown>).external_verification_redirect_url;
+          const verificationUrl = (verification as Record<string, unknown>)
+            .external_verification_redirect_url;
           if (typeof verificationUrl !== "string" || verificationUrl.length === 0) {
-            throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no browser verification.");
+            throw new BridgeError(
+              "AUTH_RESPONSE_INVALID",
+              "T3 Connect returned no browser verification.",
+            );
           }
           oauthSignInId = started.data.id;
           return verificationUrl;
@@ -579,12 +674,20 @@ export class NativeClerkProvider implements AuthProvider {
       if (completion.kind === "callback") {
         let signInId = oauthSignInId;
         if (signInId.length === 0) {
-          const current = await this.clerkRequest("/v1/client", clientToken, { method: "GET" }, "T3 Connect sign-in check");
+          const current = await this.clerkRequest(
+            "/v1/client",
+            clientToken,
+            { method: "GET" },
+            "T3 Connect sign-in check",
+          );
           clientToken = await this.rememberClientToken(current.clientToken);
           signInId = pendingSignInId(current.data) ?? "";
         }
         if (signInId.length === 0) {
-          throw new BridgeError("AUTH_CALLBACK_INVALID", "T3 Connect returned before sign-in was initialized.");
+          throw new BridgeError(
+            "AUTH_CALLBACK_INVALID",
+            "T3 Connect returned before sign-in was initialized.",
+          );
         }
         const completed = await this.clerkRequest(
           `/v1/client/sign_ins/${encodeURIComponent(signInId)}?rotating_token_nonce=${encodeURIComponent(completion.value.rotatingTokenNonce)}`,
@@ -596,7 +699,11 @@ export class NativeClerkProvider implements AuthProvider {
         client = completed.client ?? completed.data;
       } else {
         const refreshed = await this.currentClient(true);
-        if (refreshed === null) throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no completed session.");
+        if (refreshed === null)
+          throw new BridgeError(
+            "AUTH_RESPONSE_INVALID",
+            "T3 Connect returned no completed session.",
+          );
         clientToken = refreshed.clientToken;
         client = refreshed.data;
       }
@@ -605,9 +712,11 @@ export class NativeClerkProvider implements AuthProvider {
         const refreshed = await this.currentClient(true);
         client = refreshed?.data ?? null;
       }
-      if (client === null) throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no completed session.");
+      if (client === null)
+        throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no completed session.");
       const session = activeSession(client);
-      if (session === null) throw new BridgeError("AUTH_INCOMPLETE", "T3 Connect did not create an active session.");
+      if (session === null)
+        throw new BridgeError("AUTH_INCOMPLETE", "T3 Connect did not create an active session.");
       this.relayToken = null;
       await this.options.store.remove(LEGACY_CLI_OAUTH_SECRET_KEY).catch(() => undefined);
       return this.publish(this.signedInStatus(session));
@@ -631,11 +740,19 @@ export class NativeClerkProvider implements AuthProvider {
       this.options.store.remove(CLERK_CLIENT_SECRET_KEY),
       this.options.store.remove(LEGACY_CLI_OAUTH_SECRET_KEY),
     ]);
-    return this.publish({ phase: "signedOut", identity: null, remoteAccess: "unknown", detail: null });
+    return this.publish({
+      phase: "signedOut",
+      identity: null,
+      remoteAccess: "unknown",
+      detail: null,
+    });
   }
 
   async relayCredential(): Promise<{ token: string; kind: "clerk_session" }> {
-    if (this.relayToken !== null && this.relayToken.expiresAtEpochMs > Date.now() + RELAY_TOKEN_REFRESH_MARGIN_MS) {
+    if (
+      this.relayToken !== null &&
+      this.relayToken.expiresAtEpochMs > Date.now() + RELAY_TOKEN_REFRESH_MARGIN_MS
+    ) {
       return { token: this.relayToken.token, kind: "clerk_session" };
     }
     const client = await this.currentClient(false);
@@ -655,7 +772,10 @@ export class NativeClerkProvider implements AuthProvider {
       if (typeof token.data.jwt !== "string" || token.data.jwt.length === 0) {
         throw new BridgeError("AUTH_RESPONSE_INVALID", "T3 Connect returned no Relay credential.");
       }
-      this.relayToken = { token: token.data.jwt, expiresAtEpochMs: jwtExpiryEpochMs(token.data.jwt) };
+      this.relayToken = {
+        token: token.data.jwt,
+        expiresAtEpochMs: jwtExpiryEpochMs(token.data.jwt),
+      };
       return { token: this.relayToken.token, kind: "clerk_session" };
     } catch (error) {
       if (error instanceof ClerkRequestError && (error.status === 401 || error.status === 403)) {

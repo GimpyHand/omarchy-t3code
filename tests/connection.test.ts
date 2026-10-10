@@ -12,7 +12,13 @@ import type { T3RelayClient } from "../bridge/src/t3/relay.ts";
 import type { T3EnvironmentSession } from "../bridge/src/t3/session.ts";
 
 const auth = {} as AuthProvider;
-const environment = { id: "environment-1", label: "Desktop", status: "linked", serverVersion: null, lastSeenAt: null };
+const environment = {
+  id: "environment-1",
+  label: "Desktop",
+  status: "linked",
+  serverVersion: null,
+  lastSeenAt: null,
+};
 
 function mockSession(overrides: Record<string, unknown> = {}): T3EnvironmentSession {
   return {
@@ -56,6 +62,7 @@ test("retryable environment failures reconnect with backoff", async () => {
   let attempts = 0;
   const phases: string[] = [];
   const relay = {
+    close: async () => {},
     listEnvironments: async () => [environment],
     prepareConnection: async () => {
       attempts += 1;
@@ -63,7 +70,11 @@ test("retryable environment failures reconnect with backoff", async () => {
       return { environmentId: environment.id };
     },
   } as unknown as T3RelayClient;
-  const coordinator = coordinatorFor(relay, () => mockSession(), (phase) => phases.push(phase));
+  const coordinator = coordinatorFor(
+    relay,
+    () => mockSession(),
+    (phase) => phases.push(phase),
+  );
   try {
     await coordinator.discover();
     await assert.rejects(coordinator.select(environment.id), /Relay offline/u);
@@ -85,10 +96,15 @@ test("known OAuth/DPoP restriction blocks without retrying", async () => {
   process.env.XDG_STATE_HOME = state;
   let attempts = 0;
   const relay = {
+    close: async () => {},
     listEnvironments: async () => [environment],
     prepareConnection: async () => {
       attempts += 1;
-      throw new BridgeError("UPSTREAM_OAUTH_DPOP_UNSUPPORTED", "OAuth is not accepted for DPoP.", false);
+      throw new BridgeError(
+        "UPSTREAM_OAUTH_DPOP_UNSUPPORTED",
+        "OAuth is not accepted for DPoP.",
+        false,
+      );
     },
   } as unknown as T3RelayClient;
   const coordinator = coordinatorFor(relay, () => mockSession());
@@ -112,15 +128,18 @@ test("refreshing discovery preserves an active environment session", async () =>
   process.env.XDG_STATE_HOME = state;
   let connections = 0;
   const relay = {
+    close: async () => {},
     listEnvironments: async () => [environment],
     prepareConnection: async () => ({ environmentId: environment.id }),
   } as unknown as T3RelayClient;
-  const coordinator = coordinatorFor(relay, () => mockSession({
-    connect: async () => {
-      connections += 1;
-      return { environment: { serverVersion: "0.0.34" } };
-    },
-  }));
+  const coordinator = coordinatorFor(relay, () =>
+    mockSession({
+      connect: async () => {
+        connections += 1;
+        return { environment: { serverVersion: "0.0.34" } };
+      },
+    }),
+  );
   try {
     await coordinator.discover();
     await coordinator.select(environment.id);
@@ -140,18 +159,27 @@ test("discoverAndConnectAll connects every linked environment", async () => {
   const state = await mkdtemp(join(tmpdir(), "omarchy-t3-multi-"));
   const priorStateHome = process.env.XDG_STATE_HOME;
   process.env.XDG_STATE_HOME = state;
-  const second = { id: "environment-2", label: "Laptop", status: "linked", serverVersion: null, lastSeenAt: null };
+  const second = {
+    id: "environment-2",
+    label: "Laptop",
+    status: "linked",
+    serverVersion: null,
+    lastSeenAt: null,
+  };
   const connected: string[] = [];
   const relay = {
+    close: async () => {},
     listEnvironments: async () => [environment, second],
     prepareConnection: async (environmentId: string) => ({ environmentId }),
   } as unknown as T3RelayClient;
-  const coordinator = coordinatorFor(relay, () => mockSession({
-    connect: async (prepared: { environmentId: string }) => {
-      connected.push(prepared.environmentId);
-      return { environment: { serverVersion: "0.0.34" } };
-    },
-  }));
+  const coordinator = coordinatorFor(relay, () =>
+    mockSession({
+      connect: async (prepared: { environmentId: string }) => {
+        connected.push(prepared.environmentId);
+        return { environment: { serverVersion: "0.0.34" } };
+      },
+    }),
+  );
   try {
     await coordinator.discoverAndConnectAll();
     assert.deepEqual(connected.sort(), ["environment-1", "environment-2"]);

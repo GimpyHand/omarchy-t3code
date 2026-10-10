@@ -24,9 +24,16 @@ export interface ProtocolHandlerOptions {
   clearDefault?: () => Promise<void>;
 }
 
-function runXdgMime(args: string[]): Promise<CommandResult> {
+function runMimeCommand(args: string[]): Promise<CommandResult> {
+  const querying = args[0] === "query";
+  const mime = args[2] ?? T3_SCHEME_MIME;
   return new Promise((resolve, reject) => {
-    const child = spawn("xdg-mime", args, { stdio: ["ignore", "pipe", "pipe"] });
+    // xdg-mime can report a fallback instead of the configured owner when
+    // Exec is quoted. GIO is also what the browser's desktop launcher uses.
+    const child = spawn("gio", querying ? ["mime", mime] : ["mime", mime, args[1] ?? ""], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, LC_ALL: "C" },
+    });
     let stdout = "";
     let stderr = "";
     const timeout = setTimeout(() => {
@@ -46,11 +53,20 @@ function runXdgMime(args: string[]): Promise<CommandResult> {
       clearTimeout(timeout);
       reject(new BridgeError(
         "AUTH_CALLBACK_REGISTRATION_FAILED",
-        "xdg-mime is required for the T3 Connect browser callback.",
+        "GIO is required for the T3 Connect browser callback.",
       ));
     });
     child.once("close", (code) => {
       clearTimeout(timeout);
+      if (code === 0 && querying) {
+        const owner = stdout.match(/^Default application for .*: (.+)$/mu)?.[1]?.trim();
+        if (owner !== undefined) stdout = owner;
+        else if (/^No default applications for /mu.test(stdout)) stdout = "";
+        else {
+          reject(new BridgeError("AUTH_CALLBACK_REGISTRATION_FAILED", "Could not inspect the desktop callback handler."));
+          return;
+        }
+      }
       resolve({ code, stdout, stderr });
     });
   });
@@ -216,7 +232,7 @@ export async function clearT3ProtocolDefault(
 export async function activateT3ProtocolHandler(
   options: ProtocolHandlerOptions = {},
 ): Promise<() => Promise<void>> {
-  const command = options.command ?? runXdgMime;
+  const command = options.command ?? runMimeCommand;
   const desktopId = options.desktopId ?? CALLBACK_DESKTOP_ID;
   const removeDesktop = await (options.registerDesktop ?? installT3CallbackDesktop)();
   const clearDefault = options.clearDefault ?? (() => clearT3ProtocolDefault(desktopId));

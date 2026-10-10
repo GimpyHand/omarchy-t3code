@@ -47,9 +47,18 @@ export class NdjsonChannel {
         return;
       }
       this.handling = this.handling
-        .then(() => this.handler.handle(request))
+        .then(() => {
+          const pending = this.handler.handle(request);
+          // Start history in order, but let live controls proceed during the fetch.
+          // The session invalidates late pages when the thread or connection changes.
+          if (request.type === "thread.history.load" || request.type === "thread.history.latest") {
+            void pending.catch((error) => this.reportHandlerError(error));
+            return;
+          }
+          return pending;
+        })
         .catch((error) => {
-          this.write(event("error", { code: "IPC_HANDLER_FAILED", message: redactText(error), retryable: false }));
+          this.reportHandlerError(error);
         });
     });
     this.input.once("close", () => void this.handler.shutdown());
@@ -57,6 +66,10 @@ export class NdjsonChannel {
       this.write(event("error", { code: "IPC_READ_FAILED", message: redactText(error), retryable: false }));
       void this.handler.shutdown();
     });
+  }
+
+  private reportHandlerError(error: unknown): void {
+    this.write(event("error", { code: "IPC_HANDLER_FAILED", message: redactText(error), retryable: false }));
   }
 
   stop(): void {

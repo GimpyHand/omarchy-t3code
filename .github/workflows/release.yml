@@ -21,15 +21,20 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
-      - name: Initialize the pinned T3 source
-        run: git submodule update --init upstream/t3code
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
-          version: 11.10.0
+          version: latest
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.13.1
+          node-version: latest
           cache: pnpm
+      - name: Read the tagged payload builder
+        id: runtime-builder
+        run: echo "node-version=$(node -p "require('./lib/runtime-build.json').nodeVersion")" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ steps.runtime-builder.outputs.node-version }}
+      - run: node scripts/sync-t3.mjs --build-record
       - run: pnpm install --frozen-lockfile
       - name: Match the release tag to project metadata
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
@@ -37,6 +42,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm package
+      - run: pnpm verify:marketplace-runtime
       - run: cd dist && sha256sum -c omarchy-t3code-plugin.tar.gz.sha256
       - name: Create or update the GitHub release
         env:

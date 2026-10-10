@@ -7,8 +7,9 @@ Packaged plugin archives also ship that notice as `LICENSE` and
 
 ## T3 Code
 
-The bridge reuses selected source modules from T3 Code through the pinned
-`upstream/t3code` Git submodule. The vector path in `qml/T3Mark.qml` is also
+The bridge reuses selected source modules from T3 Code through the ignored
+`upstream/t3code` source checkout. `lib/runtime-build.json` records the source
+commit used for the bundled marketplace executable. The vector path in `qml/T3Mark.qml` is also
 derived from that revision.
 
 T3 Code is Copyright (c) 2026 T3 Tools Inc. and licensed under the MIT License.

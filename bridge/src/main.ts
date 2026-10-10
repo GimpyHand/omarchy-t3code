@@ -3,15 +3,18 @@ import { redactText } from "./security/redact.ts";
 import { forwardNativeCallback } from "./auth/nativeCallback.ts";
 import { SecretServiceStore } from "./security/secretStore.ts";
 import packageMetadata from "../../package.json" with { type: "json" };
-import upstreamLock from "../../t3-upstream.lock.json" with { type: "json" };
+import { upstreamBuild } from "./t3/upstreamBuild.ts";
 
 async function run(): Promise<void> {
   if (process.argv.includes("--self-test")) {
     process.stdout.write(`${JSON.stringify({
       ok: true,
       protocolVersion: 1,
+      nodeVersion: process.version,
       bridgeVersion: packageMetadata.version,
-      upstreamCommit: upstreamLock.commit,
+      upstreamCommit: upstreamBuild.commit,
+      clerkJsVersion: upstreamBuild.clerkJsVersion,
+      electronSdkVersion: upstreamBuild.electronSdkVersion,
     })}\n`);
     return;
   }

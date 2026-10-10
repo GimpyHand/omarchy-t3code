@@ -4,14 +4,16 @@ These are repository invariants, not suggestions.
 
 ## Upstream and protocol
 
-- Treat `t3-upstream.lock.json` plus the `upstream/t3code` submodule SHA as the
-  only supported T3 revision. Never change one without the other.
-- Inspect the pinned source before changing integration behavior. Do not infer
+- Track T3 main with `pnpm sync:t3`. The ignored `upstream/t3code` checkout is
+  a build input; do not add a supported-release lock or submodule pin.
+- `lib/runtime-build.json` records the shipped payload, not a compatibility
+  restriction. Use `--build-record` only to reproduce that existing payload.
+- Inspect the current source before changing integration behavior. Do not infer
   contracts, RPC methods, lifecycle rules, or authentication from memory.
 - Reuse `@t3tools/contracts`, `@t3tools/client-runtime`, and
   `@t3tools/shared`. Do not reimplement Effect RPC, relay discovery,
   WebSocket-ticket logic, DPoP semantics, shell/thread reducers, or lifecycle
-  rules when pinned upstream code exists.
+  rules when upstream code exists.
 - Keep all direct T3-internal dependencies under `bridge/src/t3` (auth may use
   upstream Connect helpers). The rest of the project consumes our protocol
   DTOs and adapter APIs.
@@ -34,7 +36,7 @@ These are repository invariants, not suggestions.
 - Use Secret Service for the Clerk client token, pending callback secret, and
   DPoP private material. Do not add plaintext credential fallback files or
   reuse/scrape another T3 client's session.
-- The pinned public CLI OAuth token is still rejected by the relay DPoP-token
+- The public CLI OAuth token is still rejected by the relay DPoP-token
   exchange. Preserve `UPSTREAM_OAUTH_DPOP_UNSUPPORTED` for that non-default
   provider kind, while routing native Clerk session JWT failures separately.
   Update the source-evidence compatibility test if upstream changes.
@@ -60,10 +62,11 @@ These are repository invariants, not suggestions.
 
 - Run `pnpm check` after behavior changes. Run `pnpm package` for packaging or
   bridge-entry changes.
-- Add/adjust tests for protocol validation, actual pinned contract decoding,
+- Add/adjust tests for protocol validation, actual upstream contract decoding,
   lifecycle mapping, streaming, reconnect, and QML state when those areas
   change.
-- Use `scripts/update-t3-nightly`; do not point dependencies at a floating
-  branch. A newer Nightly becomes supported only after the compatibility suite
-  passes and a human reviews the pin change.
+- Run `pnpm sync:t3`, `pnpm install`, and the compatibility suite when updating
+  upstream. Effect versions and patches follow the source catalog together.
+- Refresh the marketplace payload and its build record after source changes.
+  CI tests current main separately from reproducing that recorded payload.
 - Preserve T3's MIT notice and `THIRD_PARTY_NOTICES.md` in packaged artifacts.

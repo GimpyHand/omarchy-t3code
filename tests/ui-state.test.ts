@@ -389,8 +389,8 @@ test("CI proves marketplace runtime provenance before trusting tracked bytes", a
   assert.doesNotMatch(repositoryValidator, /bin["', /]+t3-mini-bridge[^\n]*--self-test/u);
   assert.match(repositoryValidator, /uncompressedSha256[\s\S]*createGunzip/u);
   assert.match(provenanceVerifier, /createGunzip\(\)[\s\S]*spawnSync\("cmp"/u);
-  assert.match(provenanceVerifier, /process\.version !== `v\$\{expectedNodeVersion\}`/u);
-  assert.match(workflow, /node-version-file: \.node-version[\s\S]*pnpm package[\s\S]*pnpm verify:marketplace-runtime/u);
+  assert.match(provenanceVerifier, /process\.version !== buildRecord\.nodeVersion/u);
+  assert.match(workflow, /sync-t3\.mjs --build-record[\s\S]*pnpm package[\s\S]*pnpm verify:marketplace-runtime/u);
 });
 
 test("blocked Relay connection hides and disables task creation", async () => {

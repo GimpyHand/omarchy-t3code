@@ -18,6 +18,9 @@ function run(command, args, options = {}) {
   return result;
 }
 
-if (process.env.npm_execpath) run(process.execPath, [process.env.npm_execpath, "package"]);
+if (process.env.npm_execpath) {
+  if (/\.[cm]?js$/u.test(process.env.npm_execpath)) run(process.execPath, [process.env.npm_execpath, "package"]);
+  else run(process.env.npm_execpath, ["package"]);
+}
 else run("pnpm", ["package"]);
 run(join(root, "dist", "install"), [], { cwd: join(root, "dist") });

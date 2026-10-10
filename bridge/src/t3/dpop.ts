@@ -1,14 +1,11 @@
 import { ManagedRelay } from "@t3tools/client-runtime/relay";
-import {
-  computeDpopJwkThumbprint,
-  type DpopPublicJwk,
-} from "@t3tools/shared/dpop";
+import { computeDpopJwkThumbprint, type DpopPublicJwk } from "@t3tools/shared/dpop";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { importJWK, type JWK } from "jose";
 
 import {
-  browserCryptoLayer,
+  layer as browserCryptoLayer,
   createBrowserDpopProof,
 } from "../../../upstream/t3code/apps/web/src/cloud/dpop.ts";
 
@@ -41,10 +38,14 @@ function isPublicJwk(value: unknown): value is DpopPublicJwk {
 
 async function importStored(value: string): Promise<LoadedDpopKey> {
   const parsed = JSON.parse(value) as Partial<StoredDpopKey>;
-  if (!parsed.privateJwk || !isPublicJwk(parsed.publicJwk)) throw new Error("Stored DPoP key is invalid.");
+  if (!parsed.privateJwk || !isPublicJwk(parsed.publicJwk))
+    throw new Error("Stored DPoP key is invalid.");
   const thumbprint = computeDpopJwkThumbprint(parsed.publicJwk);
-  if (parsed.thumbprint !== thumbprint) throw new Error("Stored DPoP key thumbprint does not match.");
-  const privateKey = (await importJWK(parsed.privateJwk, "ES256", { extractable: false })) as CryptoKey;
+  if (parsed.thumbprint !== thumbprint)
+    throw new Error("Stored DPoP key thumbprint does not match.");
+  const privateKey = (await importJWK(parsed.privateJwk, "ES256", {
+    extractable: false,
+  })) as CryptoKey;
   return { privateJwk: parsed.privateJwk, publicJwk: parsed.publicJwk, thumbprint, privateKey };
 }
 
@@ -101,12 +102,13 @@ export class DpopKeyManager {
               Effect.map((result) => result.proof),
             ),
           ),
-          Effect.mapError((cause) =>
-            new ManagedRelay.ManagedRelayDpopProofCreationError({
-              method: input.method,
-              url: input.url,
-              cause,
-            }),
+          Effect.mapError(
+            (cause) =>
+              new ManagedRelay.ManagedRelayDpopProofCreationError({
+                method: input.method,
+                url: input.url,
+                cause,
+              }),
           ),
         ),
     });

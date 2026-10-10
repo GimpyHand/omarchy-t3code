@@ -230,6 +230,21 @@ Item {
     request("thread.send", payload, callback)
   }
   function interrupt(threadId, environmentId) { request("thread.interrupt", { environmentId: environmentId, threadId: threadId }) }
+  function loadEarlier(threadId, environmentId, callback) {
+    request("thread.history.load", { environmentId: environmentId, threadId: threadId }, callback)
+  }
+  function showLatest(threadId, environmentId, callback) {
+    request("thread.history.latest", { environmentId: environmentId, threadId: threadId }, callback)
+  }
+  function resumeQueue(threadId, environmentId, callback) {
+    request("thread.queue.resume", { environmentId: environmentId, threadId: threadId }, callback)
+  }
+  function cancelQueuedMessage(threadId, environmentId, runId, callback) {
+    request("thread.queue.cancel", { environmentId: environmentId, threadId: threadId, runId: runId }, callback)
+  }
+  function editQueuedMessage(threadId, environmentId, runId, text, callback) {
+    request("thread.queue.edit", { environmentId: environmentId, threadId: threadId, runId: runId, text: text }, callback)
+  }
   function settle(threadId, environmentId) { request("thread.settle", { environmentId: environmentId, threadId: threadId }) }
   function unsettle(threadId, environmentId) { request("thread.unsettle", { environmentId: environmentId, threadId: threadId }) }
   function snooze(threadId, environmentId, until) { request("thread.snooze", { environmentId: environmentId, threadId: threadId, until: until }) }

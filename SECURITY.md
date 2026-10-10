@@ -82,20 +82,21 @@ script URLs are rejected.
 
 ## Supply chain and packaging
 
-The T3 source is a Git submodule pinned to a full commit and the release tag is
-separately locked. pnpm's lockfile and the exact upstream Effect patch make
-builds repeatable. Packaged artifacts include the T3 notice, the exact Node
+Development fetches T3 main into an ignored source checkout. Effect versions
+and patches follow that checkout's catalog. The pnpm lockfile records the
+dependency graph. Packaged artifacts include the T3 notice, the exact Node
 runtime notice, and all dependency notices discovered from the bundle source
 map; they exclude the upstream repository, source maps, tests, credentials,
 and development files.
 
-The standalone executable is derived from the pinned source with the official
-Linux x64 Node version in `.node-version`, pnpm from `packageManager`, the
-locked dependency graph, and repository-relative SEA input paths. CI performs
-a fresh build, decompresses the tracked marketplace payload without executing
-it, and fails unless the two executables are byte-for-byte identical and share
-the tracked SHA-256. The embedded self-test remains a functional version/pin
-check; it is not used as the provenance proof.
+The shipped executable records its source commit, SDK versions, and Node
+builder in `lib/runtime-build.json`. CI reconstructs that artifact with its
+recorded official Linux x64 Node distribution, locked dependency graph, and
+repository-relative SEA input paths. It decompresses the tracked payload
+without executing it and requires byte-for-byte equality and the tracked
+SHA-256. The embedded self-test checks metadata; it is not the provenance proof.
+A separate CI job builds and tests current T3 main with current Node. Build
+records identify existing artifacts without restricting supported source revisions.
 
 The root marketplace plugin carries that x86-64 executable as a compressed
 local payload. Its launcher verifies the CI-bound uncompressed checksum before
