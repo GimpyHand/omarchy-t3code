@@ -40,11 +40,12 @@ omarchy plugin add https://github.com/GimpyHand/omarchy-t3code.git --enable
 ```
 
 Omarchy warns that plugins run unsandboxed, clones this repo, validates the
-manifest, and enables the plugin. No Node or pnpm needed at runtime.
+manifest, and enables the plugin. No Node or pnpm needed at runtime. `--enable`
+asks which bar section to use, defaulting to the right section.
 
 ```bash
-omarchy plugin update bralyx.t3code
-omarchy bar put bralyx.t3code --section right --index 0
+omarchy plugin update bralyx.t3code                     # newer release later
+omarchy bar move bralyx.t3code --section right --index 0 # move the widget
 ```
 
 Or use a release archive:
@@ -60,27 +61,38 @@ you to Inbox.
 ## Requirements
 
 - A T3 account with at least one linked environment reachable through Relay
-- Omarchy 4.0+ (x86-64) with Quickshell plugins and `wl-paste`
-- Secret Service + `secret-tool`
-- `xdg-open`, `xdg-mime`, `gzip`, `sha256sum`, graphical browser
+- Omarchy 4.0+ (x86-64) with Quickshell plugins
+- Secret Service and `secret-tool` (for the Clerk session and DPoP identity)
+- `wl-paste`, `xdg-open`, `xdg-mime`, `gzip`, `sha256sum`, graphical browser
+
+The tools above ship with Omarchy's base packages (`libsecret`, `wl-clipboard`,
+`xdg-utils`, `gzip`, `coreutils`), so a standard install needs nothing extra.
+The browser is used only for the one-time sign-in, and `python3` is used for the
+NDJSON line relay when present — the launcher runs the bridge directly without
+it.
 
 Other Linux arches can build a native bridge from source.
 
 ## Uninstall
 
-From an installed checkout:
-
 ```bash
-~/.config/omarchy/plugins/bralyx.t3code/uninstall
+omarchy plugin remove bralyx.t3code
 ```
 
-From a release archive (same directory as `install`):
+That removes the checkout and its bar widget, but leaves the Secret Service
+entries. To clear the stored Clerk client token, callback secret, OAuth token,
+and DPoP key as well:
 
 ```bash
-./uninstall
+for item in t3-connect-clerk-client t3-connect-oauth \
+  t3-connect-native-callback relay-dpop-proof-key; do
+  secret-tool clear application bralyx.t3code item "$item"
+done
 ```
 
-Add `--keep-secrets` to retain the Clerk session and DPoP identity.
+Release archives still ship the `./uninstall` helper, where `--keep-secrets`
+retains the Clerk session and DPoP identity. From a source checkout, use
+`pnpm remove:plugin`.
 
 ## Development
 
