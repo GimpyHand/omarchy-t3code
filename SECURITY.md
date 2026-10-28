@@ -125,8 +125,9 @@ authorization codes, Secret Service output, or DPoP private JWKs. Include the
 lock-file tag and commit, bridge error code, Omarchy version, and sanitized
 reproduction steps.
 
-To completely remove the local trust material, run `uninstall` from the
-installed marketplace checkout, the packaged `./uninstall`, or
+To completely remove the local trust material, run `omarchy plugin remove
+bralyx.t3code` and clear the Secret Service entries listed in the
+[README](README.md#uninstall), use the packaged `./uninstall`, or run
 `pnpm remove:plugin` from a source checkout. `--keep-secrets` is available
 only when deliberately preserving the native session and DPoP identity for a
 later reinstall.
