@@ -45,7 +45,7 @@ asks which bar section to use, defaulting to the right section.
 
 ```bash
 omarchy plugin update bralyx.t3code                     # newer release later
-omarchy bar put bralyx.t3code --section right --index 0 # move the widget
+omarchy bar move bralyx.t3code --section right --index 0 # move the widget
 ```
 
 Or use a release archive:
@@ -62,7 +62,7 @@ you to Inbox.
 
 - A T3 account with at least one linked environment reachable through Relay
 - Omarchy 4.0+ (x86-64) with Quickshell plugins
-- Secret Service (for the Clerk session and DPoP identity)
+- Secret Service and `secret-tool` (for the Clerk session and DPoP identity)
 - `wl-paste`, `xdg-open`, `xdg-mime`, `gzip`, `sha256sum`, graphical browser
 
 The tools above ship with Omarchy's base packages (`libsecret`, `wl-clipboard`,
