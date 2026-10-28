@@ -23,3 +23,6 @@ catalog:
 
 patchedDependencies:
   effect@4.0.0-beta.103: upstream/t3code/patches/effect@4.0.0-beta.103.patch
+
+overrides:
+  toml: 5.0.1

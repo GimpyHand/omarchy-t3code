@@ -34,6 +34,9 @@ catalogs:
       specifier: ^2.9.0
       version: 2.9.0
 
+overrides:
+  toml: 5.0.1
+
 patchedDependencies:
   effect@4.0.0-beta.103: af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6
 
@@ -1299,8 +1302,8 @@ packages:
     resolution: {integrity: sha512-yau8yJdTt989Mm0Bd/236QnzEiPf2xLLTqUZRUJOo/3CB078LSwzei343DgtJVmfJKJE3TMINY1u42SQsP6mXw==}
     engines: {node: '>=14.0.0'}
 
-  toml@4.3.0:
-    resolution: {integrity: sha512-lVb8X9BsPVuH0M4BKeS91tXAmJvCjQ5UIyAbQFaxkKGyUFK2RPkhwaFSQH8vbpl1d23eu/IBH+dwVMHWaq9A5A==}
+  toml@5.0.1:
+    resolution: {integrity: sha512-EqYNA/YvUNndrA2B3O2ojzLQoTQrBxeZ9UIjQwk8t10oe6n7dwclBwd9IdZQTOKwe6vWX+AXtl6IntXRbepdxQ==}
     engines: {node: '>=20'}
 
   totalist@3.0.1:
@@ -1964,7 +1967,7 @@ snapshots:
       kubernetes-types: 1.30.0
       msgpackr: 2.0.5
       multipasta: 0.2.8
-      toml: 4.3.0
+      toml: 5.0.1
       uuid: 14.0.2
       yaml: 2.9.0
 
@@ -2268,7 +2271,7 @@ snapshots:
 
   tinyrainbow@3.1.1: {}
 
-  toml@4.3.0: {}
+  toml@5.0.1: {}
 
   totalist@3.0.1: {}
 
